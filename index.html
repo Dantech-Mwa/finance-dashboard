@@ -12,39 +12,47 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
 
   <style>
-    html,body{all:unset;display:block;height:100%}
-    *{box-sizing:border-box}
-    body{font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f6f8fb;margin:0;padding:18px;color:#0b2240}
-    #app{max-width:1200px;margin:0 auto;background:#fff;border-radius:12px;padding:18px;border:1px solid #e6eef6;box-shadow:0 12px 40px rgba(13,30,50,0.06)}
-    .header{display:flex;align-items:center;justify-content:space-between}
-    .brand{display:flex;gap:12px;align-items:center}
-    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#e6f2ff,#fff);display:flex;align-items:center;justify-content:center;font-weight:800}
-    .title{font-size:18px;font-weight:700}
-    .subtitle{font-size:13px;color:#6b7b8c}
-    .controls{display:flex;gap:8px;align-items:center}
-    .controls input,.controls select{padding:8px;border-radius:8px;border:1px solid #dcebf7}
-    .controls button{padding:8px 12px;border-radius:8px;border:none;background:#0b76d1;color:#fff;cursor:pointer}
-    .grid{display:grid;grid-template-columns:320px 1fr;gap:18px;margin-top:16px}
-    .left{display:flex;flex-direction:column;gap:12px}
-    .card{background:#fff;border:1px solid #eef6fb;border-radius:10px;padding:12px}
-    .chartCard{display:flex;flex-direction:column}
-    .chartToolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-    .chartWrap{height:420px}
-    .newsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
-    .newsCard{background:#fff;border:1px solid #eef6fb;border-radius:8px;overflow:hidden;text-decoration:none;color:inherit;display:block}
-    .newsCard img{width:100%;height:140px;object-fit:cover}
-    .newsCard .body{padding:10px}
-    .newsCard h5{margin:0 0 6px 0;font-size:15px}
-    .newsCard .meta{font-size:12px;color:#6b7b8c}
-    .postsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
-    .post{padding:12px;border-radius:8px;background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid #eef6fb}
-    footer{margin-top:18px;padding-top:12px;border-top:1px solid #eef6fb;display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
-    .contact input,.contact textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #dcebf7;margin-top:8px}
-    .contact button{margin-top:8px;padding:10px 12px;border-radius:8px;border:none;background:#0b76d1;color:#fff;cursor:pointer}
-    .advice{background:linear-gradient(180deg,#fff,#fbfdff);padding:10px;border-radius:8px;border:1px solid #eef6fb}
-    .error{color:#d32f2f;font-style:italic}
-    @media (max-width:1100px){.newsGrid{grid-template-columns:repeat(2,1fr)}.postsGrid{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
-    @media (max-width:700px){.newsGrid{grid-template-columns:1fr}.postsGrid{grid-template-columns:1fr}}
+    html, body { all: unset; display: block; height: 100%; }
+    * { box-sizing: border-box; }
+    body { font-family: Inter, Segoe UI, Roboto, Arial, sans-serif; background: #f6f8fb; margin: 0; padding: 18px; color: #0b2240; }
+    #app { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 18px; border: 1px solid #e6eef6; box-shadow: 0 12px 40px rgba(13, 30, 50, 0.06); }
+    .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid #e6eef6; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .logo { width: 56px; height: 56px; border-radius: 10px; background: linear-gradient(135deg, #e6f2ff, #fff); display: flex; align-items: center; justify-content: center; font-weight: 800; color: #0b76d1; }
+    .title { font-size: 18px; font-weight: 700; }
+    .subtitle { font-size: 13px; color: #6b7b8c; }
+    .controls { display: flex; gap: 8px; align-items: center; }
+    .controls input, .controls select { padding: 8px; border-radius: 8px; border: 1px solid #dcebf7; font-size: 14px; }
+    .controls button { padding: 8px 12px; border-radius: 8px; border: none; background: #0b76d1; color: #fff; cursor: pointer; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; margin-top: 16px; }
+    .left { display: flex; flex-direction: column; gap: 12px; }
+    .card { background: #fff; border: 1px solid #eef6fb; border-radius: 10px; padding: 12px; }
+    .chartCard { display: flex; flex-direction: column; }
+    .chartToolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .chartWrap { height: 420px; position: relative; }
+    .timeRange { display: flex; gap: 4px; }
+    .timeRange button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
+    .timeRange button.active { background: #0b76d1; color: #fff; }
+    .newsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+    .newsCard { background: #fff; border: 1px solid #eef6fb; border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: transform 0.2s; }
+    .newsCard:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+    .newsCard img { width: 100%; height: 140px; object-fit: cover; }
+    .newsCard .body { padding: 10px; }
+    .newsCard h5 { margin: 0 0 6px 0; font-size: 15px; }
+    .newsCard .meta { font-size: 12px; color: #6b7b8c; }
+    .postsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+    .post { padding: 12px; border-radius: 8px; background: linear-gradient(180deg, #fff, #fbfdff); border: 1px solid #eef6fb; display: flex; flex-direction: column; justify-content: space-between; }
+    .post h4 { margin: 0 0 6px 0; font-size: 16px; }
+    .post .meta { font-size: 14px; color: #0b2240; }
+    .post .change { font-size: 14px; color: #d32f2f; }
+    .post .change.green { color: #00cc00; }
+    footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid #eef6fb; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+    .contact input, .contact textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #dcebf7; margin-top: 8px; }
+    .contact button { margin-top: 8px; padding: 10px 12px; border-radius: 8px; border: none; background: #0b76d1; color: #fff; cursor: pointer; }
+    .advice { background: linear-gradient(180deg, #fff, #fbfdff); padding: 10px; border-radius: 8px; border: 1px solid #eef6fb; }
+    .error { color: #d32f2f; font-style: italic; }
+    @media (max-width: 1100px) { .newsGrid, .postsGrid { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) { .newsGrid, .postsGrid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -59,8 +67,6 @@
       </div>
       <div class="controls">
         <input id="globalSearch" placeholder="Symbol e.g. AAPL, TSLA, BTC, EURUSD">
-        <select id="intervalSel"><option value="5min">5m</option><option value="15min">15m</option><option value="60min">60m</option></select>
-        <select id="maSel"><option value="none">MA: none</option><option value="ma10">MA10</option><option value="ma20">MA20</option><option value="ma50">MA50</option></select>
         <button id="loadBtn">Load</button>
       </div>
     </div>
@@ -70,7 +76,7 @@
         <div class="card">
           <h4>Watchlist</h4>
           <div id="watchlist">Loading…</div>
-          <div style="margin-top:8px"><small class="meta">Tip: Add any global ticker (US/EU/Asia). For forex use EURUSD, for crypto use BTC, ETH etc. Note: Demo data used; get free API key at alphavantage.co for full access.</small></div>
+          <div style="margin-top:8px"><small class="meta">Tip: Add any global ticker (US/EU/Asia). For forex use EURUSD, for crypto use BTC, ETH etc.</small></div>
         </div>
         <div class="card">
           <h4>Quick Trade Advisories</h4>
@@ -86,6 +92,7 @@
           <div class="chartToolbar">
             <div><strong id="chartTitle">Select a symbol</strong></div>
             <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
+            <div class="timeRange" id="timeRange"></div>
           </div>
           <div class="chartWrap"><canvas id="ohlcChart"></canvas></div>
           <div style="margin-top:12px">
@@ -103,7 +110,7 @@
     <footer>
       <div>
         <div style="font-weight:700">Market Pulse</div>
-        <div class="meta">Advanced dashboard — data via Alpha Vantage (demo) & CoinGecko</div>
+        <div class="meta">Advanced dashboard — data via Alpha Vantage & CoinGecko</div>
       </div>
       <div class="contact card" style="width:360px">
         <strong>Contact</strong>
@@ -119,8 +126,8 @@
 
   <script>
     // CONFIG
-    const ALPHA_KEY = 'demo'; // Demo key for testing; replace with your free key from alphavantage.co
-    const RSS_PROXY = 'https://api.allorigins.win/raw?url='; // Proxy for RSS fetching to handle CORS
+    const ALPHA_KEY = 'demo'; // Demo key; replace with your free key from alphavantage.co
+    const RSS_PROXY = 'https://api.allorigins.win/raw?url=';
 
     // Helpers
     const $ = id => document.getElementById(id);
@@ -144,22 +151,10 @@
         return;
       }
       $('watchlist').innerHTML = list.map(s => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #f1f6fb">
-          <div><strong>${s}</strong></div>
-          <div>
-            <button data-sym="${s}" class="viewBtn" style="padding:4px 8px;font-size:12px;background:#0b76d1;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:4px">View</button>
-            <button data-sym="${s}" class="rmBtn" style="padding:4px 8px;font-size:12px;background:#d32f2f;color:#fff;border:none;border-radius:4px;cursor:pointer">Remove</button>
-          </div>
+        <div style="padding:8px 0;border-bottom:1px dashed #f1f6fb">
+          <strong>${s}</strong>
         </div>
       `).join('');
-      document.querySelectorAll('.viewBtn').forEach(b => b.addEventListener('click', () => loadSymbol(b.dataset.sym)));
-      document.querySelectorAll('.rmBtn').forEach(b => {
-        b.addEventListener('click', () => {
-          const arr = getWatch().filter(x => x !== b.dataset.sym);
-          saveWatch(arr);
-          renderWatch();
-        });
-      });
     }
 
     // Add via controls
@@ -176,24 +171,24 @@
       loadSymbol(val);
     });
 
-    // TIME SERIES FETCH & OHLC conversion with error handling
-    async function fetchAlphaIntraday(symbol, interval) {
-      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=compact&apikey=${ALPHA_KEY}`;
+    // TIME SERIES FETCH & OHLC conversion
+    async function fetchAlphaIntraday(symbol, interval, days = '1') {
+      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${ALPHA_KEY}`;
       try {
         const r = await fetch(url);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json();
-        if (j['Error Message'] || j['Note']) throw new Error(j['Error Message'] || j['Note'] || 'API error');
-        const ts = j[`Time Series (${interval})`] || null;
+        if (j['Error Message'] || j['Note']) throw new Error(j['Error Message'] || j['Note']);
+        const ts = j['Time Series (Daily)'] || null;
         if (!ts) return { error: 'No time series data' };
-        const keys = Object.keys(ts).sort().reverse(); // Most recent first
-        const ohlc = keys.slice(0, 100).map(k => ({ // Limit to 100 for performance
+        const keys = Object.keys(ts).sort().reverse().slice(0, days === '1' ? 100 : days * 30);
+        const ohlc = keys.map(k => ({
           t: new Date(k).getTime(),
           o: Number(ts[k]['1. open']),
           h: Number(ts[k]['2. high']),
           l: Number(ts[k]['3. low']),
           c: Number(ts[k]['4. close'])
-        })).reverse(); // Reverse to chronological
+        }));
         return { ohlc, last: keys[0] };
       } catch (e) {
         console.error('Alpha Intraday fetch error:', e);
@@ -201,33 +196,9 @@
       }
     }
 
-    async function fetchAlphaFX(from, to, interval) {
-      const url = `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${from}&to_symbol=${to}&interval=${interval}&outputsize=compact&apikey=${ALPHA_KEY}`;
+    async function fetchCoinGecko(id, days = 1) {
       try {
-        const r = await fetch(url);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const j = await r.json();
-        if (j['Error Message'] || j['Note']) throw new Error(j['Error Message'] || j['Note'] || 'API error');
-        const ts = j[`Time Series FX (${interval})`] || null;
-        if (!ts) return { error: 'No FX time series data' };
-        const keys = Object.keys(ts).sort().reverse();
-        const ohlc = keys.slice(0, 100).map(k => ({
-          t: new Date(k).getTime(),
-          o: Number(ts[k]['1. open']),
-          h: Number(ts[k]['2. high']),
-          l: Number(ts[k]['3. low']),
-          c: Number(ts[k]['4. close'])
-        })).reverse();
-        return { ohlc, last: keys[0] };
-      } catch (e) {
-        console.error('Alpha FX fetch error:', e);
-        return { error: e.message };
-      }
-    }
-
-    async function fetchCoinGecko(id) {
-      try {
-        const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=1`);
+        const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=${days}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json();
         const ohlc = j.map(item => ({
@@ -246,6 +217,8 @@
 
     // Render candlestick chart
     let ohlcChart = null;
+    let currentSymbol = '';
+    let currentRange = '1D';
     function renderOHLC(ohlc, label, maOption) {
       if (ohlc.length === 0) return;
       const ctx = $('ohlcChart').getContext('2d');
@@ -253,7 +226,8 @@
       const datasets = [{
         label: label,
         data: ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c })),
-        type: 'candlestick'
+        type: 'candlestick',
+        borderColor: { up: '#00cc00', down: '#ff3333', unchanged: '#999999' }
       }];
 
       if (maOption && maOption !== 'none') {
@@ -277,11 +251,7 @@
           responsive: true,
           plugins: { legend: { display: true } },
           scales: {
-            x: {
-              type: 'time',
-              time: { unit: 'hour' },
-              adapters: { date: { locale: 'en' } }
-            },
+            x: { type: 'time', time: { unit: currentRange === '1D' ? 'hour' : 'day' } },
             y: { beginAtZero: false }
           }
         }
@@ -301,7 +271,7 @@
       return res;
     }
 
-    // News loading with direct RSS parsing via proxy
+    // News loading
     async function parseRSS(xmlText) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(xmlText, 'text/xml');
@@ -310,8 +280,7 @@
         title: item.querySelector('title')?.textContent || '',
         link: item.querySelector('link')?.textContent || '',
         description: item.querySelector('description')?.textContent || '',
-        pubDate: item.querySelector('pubDate')?.textContent || '',
-        author: item.querySelector('author')?.textContent || ''
+        pubDate: item.querySelector('pubDate')?.textContent || ''
       }));
     }
 
@@ -319,7 +288,7 @@
       const feeds = [
         'https://feeds.reuters.com/reuters/businessNews',
         'http://feeds.bbci.co.uk/news/business/rss.xml',
-        'https://www.cnbc.com/id/100003114/device/rss/rss.html' // Updated CNBC RSS
+        'https://www.cnbc.com/id/100003114/device/rss/rss.html'
       ];
       let allItems = [];
       for (const feedUrl of feeds) {
@@ -335,25 +304,23 @@
         }
       }
       if (allItems.length === 0) {
-        $('newsGrid').innerHTML = '<div class="error" style="grid-column:1/-1;text-align:center;padding:20px">Failed to load news. Check console for details.</div>';
+        $('newsGrid').innerHTML = '<div class="error" style="grid-column:1/-1;text-align:center;padding:20px">Failed to load news.</div>';
         return;
       }
       const top = allItems.slice(0, 9).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-      const nodes = await Promise.all(top.map(async (it) => {
-        let img = 'https://via.placeholder.com/600x400?text=News';
-        // Try to extract image from description
+      const nodes = top.map(it => {
         const imgMatch = it.description.match(/<img[^>]+src="([^">]+)"/i);
-        if (imgMatch) img = imgMatch[1];
+        const img = imgMatch ? imgMatch[1] : 'https://via.placeholder.com/600x400?text=News';
         return `
           <a class="newsCard" href="${it.link}" target="_blank" rel="noreferrer">
             <img src="${img}" alt="thumb" onerror="this.src='https://via.placeholder.com/600x400?text=News'">
             <div class="body">
               <h5>${it.title}</h5>
-              <div class="meta">${it.author || new Date(it.pubDate).toLocaleDateString()}</div>
+              <div class="meta">${new Date(it.pubDate).toLocaleDateString()}</div>
             </div>
           </a>
         `;
-      }));
+      });
       $('newsGrid').innerHTML = nodes.join('');
     }
 
@@ -377,23 +344,19 @@
       const prev = closes[closes.length - 5] || closes[0];
       const changePct = ((closes[idx] - prev) / prev) * 100;
       if (Math.abs(changePct) > 2) {
-        signal.momentum = changePct.toFixed(2) + '% over last 5 intervals';
+        signal.momentum = changePct.toFixed(2) + '% over last 5 days';
       }
       return signal;
     }
 
-    function updateAdvisories(symbol, ohlcOrError) {
-      if (ohlcOrError.error) {
-        $('advisories').innerHTML = `<div class="error"><strong>${symbol}</strong>: ${ohlcOrError.error}. <a href="https://www.alphavantage.co/support/#api-key" target="_blank">Get your free API key</a>.</div>`;
-        return;
-      }
-      const s = computeSignalsFromOHLC(ohlcOrError.ohlc);
+    async function updateAdvisories(symbol, ohlc) {
+      const s = computeSignalsFromOHLC(ohlc);
       $('advisories').innerHTML = `
         <strong>${symbol}</strong>
         <div style="margin-top:6px">Recommendation: <strong>${s.recommendation}</strong></div>
         <div class="meta" style="margin-top:6px">${s.reason}</div>
         ${s.momentum ? `<div class="meta" style="margin-top:6px">Momentum: ${s.momentum}</div>` : ''}
-        <div style="margin-top:10px;font-size:13px">Note: Demo data limited. Forex: Use tight stops. Crypto: Dollar-cost average.</div>
+        <div style="margin-top:10px;font-size:13px">Note: Forex: Use tight stops. Crypto: Dollar-cost average.</div>
       `;
     }
 
@@ -405,64 +368,57 @@
         const nodes = js.map(c => {
           const change = Number(c.price_change_percentage_24h || 0).toFixed(2);
           let rec = 'Hold';
-          if (change > 5 && c.total_volume > 50000000) rec = 'Consider Selling (strong run)';
-          if (change < -7 && c.total_volume > 20000000) rec = 'Consider Buying (pullback)';
+          if (change > 5 && c.total_volume > 50000000) rec = 'Consider Selling';
+          if (change < -7 && c.total_volume > 20000000) rec = 'Consider Buying';
           return `
             <div style="padding:6px 0;border-bottom:1px dashed #f1f6fb">
               <strong>${c.symbol.toUpperCase()}</strong> $${c.current_price.toLocaleString()}
-              <div class="meta">24h: ${change}% · Vol: $${Number(c.total_volume || 0).toLocaleString()}</div>
+              <div class="meta">24h: ${change}%</div>
               <div style="margin-top:6px"><em>${rec}</em></div>
             </div>
           `;
         });
         $('cryptoAdvice').innerHTML = nodes.join('');
       } catch (e) {
-        console.error('Crypto advice error:', e);
         $('cryptoAdvice').innerHTML = '<div class="error">Failed to load crypto suggestions.</div>';
       }
     }
 
-    // Load symbol: unified for stock, fx, crypto
-    async function loadSymbol(symbol) {
+    // Load symbol with time range
+    async function loadSymbol(symbol, range = '1D') {
       if (!symbol) return;
-      symbol = symbol.toUpperCase();
-      $('chartTitle').textContent = `Loading ${symbol}...`;
-      const interval = $('intervalSel').value;
-      let res = await fetchAlphaIntraday(symbol, interval);
-      if (res.error && symbol.length === 6) {
-        const from = symbol.slice(0, 3);
-        const to = symbol.slice(3);
-        res = await fetchAlphaFX(from, to, interval);
-      }
-      if (res.error) {
-        // Try crypto
-        try {
+      currentSymbol = symbol;
+      currentRange = range;
+      $('chartTitle').textContent = `Loading ${symbol} (${range})...`;
+      let res;
+      try {
+        res = await fetchAlphaIntraday(symbol, 'daily', range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
+        if (res.error) {
           const listRes = await fetch('https://api.coingecko.com/api/v3/coins/list');
           const list = await listRes.json();
           const found = list.find(x => x.symbol.toLowerCase() === symbol.toLowerCase());
           if (found) {
-            const cg = await fetchCoinGecko(found.id);
-            if (cg && cg.ohlc.length > 0) {
-              renderOHLC(cg.ohlc, symbol, $('maSel').value);
-              $('chartUpdated').textContent = cg.last ? new Date(cg.last).toLocaleString() : '--';
-              updateAdvisories(symbol, { ohlc: cg.ohlc });
-              return;
-            }
+            res = await fetchCoinGecko(found.id, range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
           }
-        } catch (cgErr) {
-          console.error('Crypto lookup error:', cgErr);
         }
-        $('chartTitle').textContent = `${symbol} — ${res.error || 'No data'}`;
+        if (res && res.ohlc && res.ohlc.length > 0) {
+          renderOHLC(res.ohlc, symbol, 'ma50'); // Default to MA50
+          $('chartUpdated').textContent = res.last ? new Date(res.last).toLocaleString() : '--';
+          updateAdvisories(symbol, res.ohlc);
+        } else {
+          $('chartTitle').textContent = `${symbol} (${range}) — No data`;
+          $('chartUpdated').textContent = '--';
+          updateAdvisories(symbol, { error: 'No data available' });
+        }
+      } catch (e) {
+        console.error('Load symbol error:', e);
+        $('chartTitle').textContent = `${symbol} (${range}) — Error`;
         $('chartUpdated').textContent = '--';
-        updateAdvisories(symbol, res);
-        return;
+        updateAdvisories(symbol, { error: e.message });
       }
-      renderOHLC(res.ohlc, symbol, $('maSel').value);
-      $('chartUpdated').textContent = res.last ? new Date(res.last).toLocaleString() : '--';
-      updateAdvisories(symbol, res);
     }
 
-    // Posts with error handling
+    // Posts
     async function loadPosts() {
       const watch = getWatch().slice(0, 9);
       const area = $('postsArea');
@@ -476,17 +432,18 @@
           if (j['Error Message'] || j['Note']) throw new Error(j['Error Message'] || j['Note']);
           const q = j['Global Quote'];
           const price = q ? Number(q['05. price']).toFixed(2) : '—';
-          const ch = q ? (q['10. change percent'] || '—') : '—';
+          const change = q ? Number(q['09. change']).toFixed(2) : '—';
+          const changePercent = q ? Number(q['10. change percent'].replace('%', '')).toFixed(2) : '—';
+          const changeClass = change > 0 ? 'green' : change < 0 ? '' : 'neutral';
           nodes.push(`
             <div class="post">
               <h4>${s}</h4>
-              <div class="meta">${price} · ${ch}</div>
-              <div style="margin-top:8px"><a href="#" onclick="loadSymbol('${s}');return false;" style="color:#0b76d1">View chart</a></div>
+              <div class="meta">${price}</div>
+              <div class="change ${changeClass}">${change} (${changePercent}%)</div>
             </div>
           `);
         } catch (e) {
-          console.error(`Post load error for ${s}:`, e);
-          nodes.push(`<div class="post"><h4>${s}</h4><div class="meta error">data error: ${e.message}</div></div>`);
+          nodes.push(`<div class="post"><h4>${s}</h4><div class="meta error">data error</div></div>`);
         }
       }
       area.innerHTML = nodes.join('');
@@ -496,6 +453,17 @@
     async function loadAll() {
       renderWatch();
       await Promise.allSettled([loadCryptoAdvice(), loadNews(), loadPosts()]);
+      // Initialize time range buttons
+      const ranges = ['1D', '1W', '1M', '3M', '1Y', '5Y'];
+      const timeRangeDiv = $('timeRange');
+      timeRangeDiv.innerHTML = ranges.map(r => `<button class="${r === '1D' ? 'active' : ''}" data-range="${r}">${r}</button>`).join('');
+      timeRangeDiv.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          timeRangeDiv.querySelector('.active').classList.remove('active');
+          btn.classList.add('active');
+          if (currentSymbol) loadSymbol(currentSymbol, btn.dataset.range);
+        });
+      });
     }
 
     $('sendBtn').addEventListener('click', () => {
@@ -512,19 +480,11 @@
       $('sendStatus').textContent = 'Opening mail client...';
     });
 
-    // Listen for MA change
-    $('maSel').addEventListener('change', () => {
-      const currentTitle = $('chartTitle').textContent;
-      if (currentTitle.startsWith('Loading') || currentTitle.includes('no data')) return;
-      const symbol = currentTitle.split(' ')[1] || getWatch()[0];
-      if (symbol) loadSymbol(symbol);
-    });
-
     (async function boot() {
       await loadAll();
       const first = getWatch()[0];
       if (first) loadSymbol(first);
-      setInterval(loadPosts, 120000); // Refresh posts
+      setInterval(loadPosts, 120000);
     })();
   </script>
 </body>
