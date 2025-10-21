@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Market Pulse — Global Markets Dashboard (Advanced)</title>
   <meta name="description" content="Advanced finance dashboard with candlestick charts, indicators, trade advisories, crypto/forex signals and news thumbnails." />
 
@@ -33,6 +33,10 @@
     .timeRange { display: flex; gap: 4px; }
     .timeRange button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
     .timeRange button.active { background: #0b76d1; color: #fff; }
+    .chartType { display: flex; gap: 4px; margin-left: 8px; }
+    .chartType button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
+    .chartType button.active { background: #0b76d1; color: #fff; }
+    .indicatorSelect { padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #dcebf7; margin-left: 8px; }
     .newsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
     .newsCard { background: #fff; border: 1px solid #eef6fb; border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: transform 0.2s; }
     .newsCard:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
@@ -93,6 +97,13 @@
             <div><strong id="chartTitle">Select a symbol</strong></div>
             <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
             <div class="timeRange" id="timeRange"></div>
+            <div class="chartType" id="chartType"></div>
+            <select id="indicatorSelect" class="indicatorSelect">
+              <option value="none">MA: None</option>
+              <option value="ma10">MA10</option>
+              <option value="ma20">MA20</option>
+              <option value="ma50">MA50</option>
+            </select>
           </div>
           <div class="chartWrap"><canvas id="ohlcChart"></canvas></div>
           <div style="margin-top:12px">
@@ -110,7 +121,7 @@
     <footer>
       <div>
         <div style="font-weight:700">Market Pulse</div>
-        <div class="meta">Advanced dashboard — data via Alpha Vantage & CoinGecko</div>
+        <div class="meta">Advanced dashboard — data via Alpha Vantage, CoinGecko & Yahoo Finance</div>
       </div>
       <div class="contact card" style="width:360px">
         <strong>Contact</strong>
@@ -126,8 +137,15 @@
 
   <script>
     // CONFIG
-    const ALPHA_KEY = 'INZ7GV3B33PXV2QM'; // Demo key; replace with your free key from alphavantage.co
+    const ALPHA_KEY = 'INZ7GV3B33PXV2QM'; // Alpha Vantage API key
+    const RAPIDAPI_KEY = 'YOUR_RAPIDAPI_KEY'; // Replace with free RapidAPI key (Yahoo Finance)
     const RSS_PROXY = 'https://api.allorigins.win/raw?url=';
+    let lastNewsUpdate = 0;
+    const NEWS_UPDATE_INTERVAL = 300000; // 5 minutes
+    let currentSymbol = '';
+    let currentRange = '1D';
+    let currentChartType = 'candlestick';
+    let currentIndicator = 'none';
 
     // Helpers
     const $ = id => document.getElementById(id);
@@ -137,6 +155,7 @@
       try {
         return JSON.parse(localStorage.getItem('mp_watch') || '["AAPL","MSFT","GOOGL","TSLA","AMZN"]');
       } catch (e) {
+        console.error('Watchlist parse error:', e);
         return ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
       }
     }
@@ -151,10 +170,12 @@
         return;
       }
       $('watchlist').innerHTML = list.map(s => `
-        <div style="padding:8px 0;border-bottom:1px dashed #f1f6fb">
-          <strong>${s}</strong>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #f1f6fb">
+          <div><strong>${s}</strong></div>
+          <button data-sym="${s}" class="viewBtn" style="padding:4px 8px;font-size:12px;background:#0b76d1;color:#fff;border:none;border-radius:4px;cursor:pointer">View</button>
         </div>
       `).join('');
+      document.querySelectorAll('.viewBtn').forEach(b => b.addEventListener('click', () => loadSymbol(b.dataset.sym)));
     }
 
     // Add via controls
@@ -171,17 +192,17 @@
       loadSymbol(val);
     });
 
-    // TIME SERIES FETCH & OHLC conversion
-    async function fetchAlphaIntraday(symbol, interval, days = '1') {
-      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${ALPHA_KEY}`;
+    // Data Fetch Functions
+    async function fetchAlphaData(symbol, interval = 'daily', days = 1) {
+      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_${interval.toUpperCase()}&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${ALPHA_KEY}`;
       try {
         const r = await fetch(url);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) throw new Error(`Alpha Vantage HTTP ${r.status}: ${await r.text()}`);
         const j = await r.json();
-        if (j['Error Message'] || j['Note']) throw new Error(j['Error Message'] || j['Note']);
-        const ts = j['Time Series (Daily)'] || null;
-        if (!ts) return { error: 'No time series data' };
-        const keys = Object.keys(ts).sort().reverse().slice(0, days === '1' ? 100 : days * 30);
+        if (j['Error Message'] || j['Note']) throw new Error(j['Error Message'] || j['Note'] || 'API limit reached');
+        const ts = j[`Time Series (${interval})`] || j['Time Series (Daily)'] || null;
+        if (!ts) return { error: 'No time series data from Alpha Vantage' };
+        const keys = Object.keys(ts).sort().reverse().slice(0, days === 1 ? 100 : days * 30);
         const ohlc = keys.map(k => ({
           t: new Date(k).getTime(),
           o: Number(ts[k]['1. open']),
@@ -191,8 +212,35 @@
         }));
         return { ohlc, last: keys[0] };
       } catch (e) {
-        console.error('Alpha Intraday fetch error:', e);
-        return { error: e.message };
+        console.error(`Alpha Vantage fetch error for ${symbol}:`, e);
+        return await fetchYahooData(symbol, days) || { error: e.message };
+      }
+    }
+
+    async function fetchYahooData(symbol, days = 1) {
+      const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v2/get-chart?interval=1d&symbol=${symbol}&range=${days === 1 ? '1d' : days <= 7 ? '5d' : days <= 30 ? '1mo' : days <= 90 ? '3mo' : days <= 365 ? '1y' : '5y'}&region=US`;
+      try {
+        const r = await fetch(url, {
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'apidojo-yahoo-finance-v1.p.rapidapi.com'
+          }
+        });
+        if (!r.ok) throw new Error(`Yahoo Finance HTTP ${r.status}: ${await r.text()}`);
+        const j = await r.json();
+        const quotes = j.chart.result[0].indicators.quote[0];
+        const timestamps = j.chart.result[0].timestamp;
+        const ohlc = timestamps.map((t, i) => ({
+          t: t * 1000,
+          o: quotes.open[i],
+          h: quotes.high[i],
+          l: quotes.low[i],
+          c: quotes.close[i]
+        })).filter(d => d.o && d.h && d.l && d.c); // Filter out undefined values
+        return { ohlc, last: timestamps.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : null };
+      } catch (e) {
+        console.error(`Yahoo Finance fetch error for ${symbol}:`, e);
+        return null;
       }
     }
 
@@ -208,36 +256,52 @@
           l: item[3],
           c: item[4]
         }));
-        return { ohlc, last: ohlc.length ? new Date(ohlc[ohlc.length - 1].t).toISOString() : null };
+        return { ohlc, last: ohlc.length ? new Date(ohlc[ohlc.length - 1][0]).toISOString() : null };
       } catch (e) {
         console.error('CoinGecko fetch error:', e);
         return null;
       }
     }
 
-    // Render candlestick chart
+    // Render chart
     let ohlcChart = null;
-    let currentSymbol = '';
-    let currentRange = '1D';
-    function renderOHLC(ohlc, label, maOption) {
-      if (ohlc.length === 0) return;
+    function renderChart(ohlc, label) {
       const ctx = $('ohlcChart').getContext('2d');
       if (ohlcChart) ohlcChart.destroy();
-      const datasets = [{
-        label: label,
-        data: ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c })),
-        type: 'candlestick',
-        borderColor: { up: '#00cc00', down: '#ff3333', unchanged: '#999999' }
-      }];
+      const data = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
+      let datasets = [];
+      if (currentChartType === 'candlestick') {
+        datasets = [{
+          label: label,
+          data: data,
+          type: 'candlestick',
+          borderColor: { up: '#00cc00', down: '#ff3333', unchanged: '#999999' }
+        }];
+      } else if (currentChartType === 'line') {
+        datasets = [{
+          label: label,
+          data: data.map(d => ({ x: d.t, y: d.c })),
+          type: 'line',
+          borderColor: '#0b76d1',
+          fill: false
+        }];
+      } else if (currentChartType === 'bar') {
+        datasets = [{
+          label: label,
+          data: data.map(d => ({ x: d.t, y: d.c })),
+          type: 'bar',
+          backgroundColor: '#0b76d1'
+        }];
+      }
 
-      if (maOption && maOption !== 'none') {
-        const n = Number(maOption.replace('ma', ''));
+      if (currentIndicator !== 'none') {
+        const n = Number(currentIndicator.replace('ma', ''));
         const closes = ohlc.map(d => d.c);
         const ma = simpleMovingAverage(closes, n);
         datasets.push({
-          label: `MA${n}`,
-          type: 'line',
+          label: `${currentIndicator.toUpperCase()}`,
           data: ma.map((v, i) => ({ x: ohlc[i].t, y: v })).filter(d => d.y !== null),
+          type: 'line',
           borderColor: '#ff7f0e',
           backgroundColor: 'rgba(255,127,14,0.08)',
           tension: 0.2,
@@ -264,14 +328,14 @@
         if (i < n - 1) res.push(null);
         else {
           let sum = 0;
-          for (let j = 0; j < n; j++) sum += arr[i - j];
+          for (let j = 0; j < n; j++) sum += arr[i - j] || 0;
           res.push(sum / n);
         }
       }
       return res;
     }
 
-    // News loading
+    // News loading with debounced refresh
     async function parseRSS(xmlText) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(xmlText, 'text/xml');
@@ -285,6 +349,9 @@
     }
 
     async function loadNews() {
+      const now = Date.now();
+      if (now - lastNewsUpdate < NEWS_UPDATE_INTERVAL) return;
+      lastNewsUpdate = now;
       const feeds = [
         'https://feeds.reuters.com/reuters/businessNews',
         'http://feeds.bbci.co.uk/news/business/rss.xml',
@@ -349,8 +416,12 @@
       return signal;
     }
 
-    async function updateAdvisories(symbol, ohlc) {
-      const s = computeSignalsFromOHLC(ohlc);
+    async function updateAdvisories(symbol, ohlcOrError) {
+      if (ohlcOrError.error) {
+        $('advisories').innerHTML = `<div class="error"><strong>${symbol}</strong>: ${ohlcOrError.error}. Check API limits or key.</div>`;
+        return;
+      }
+      const s = computeSignalsFromOHLC(ohlcOrError.ohlc);
       $('advisories').innerHTML = `
         <strong>${symbol}</strong>
         <div style="margin-top:6px">Recommendation: <strong>${s.recommendation}</strong></div>
@@ -384,7 +455,7 @@
       }
     }
 
-    // Load symbol with time range
+    // Load symbol with multiple data sources
     async function loadSymbol(symbol, range = '1D') {
       if (!symbol) return;
       currentSymbol = symbol;
@@ -392,27 +463,25 @@
       $('chartTitle').textContent = `Loading ${symbol} (${range})...`;
       let res;
       try {
-        res = await fetchAlphaIntraday(symbol, 'daily', range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
+        res = await fetchAlphaData(symbol, 'daily', range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
         if (res.error) {
           const listRes = await fetch('https://api.coingecko.com/api/v3/coins/list');
           const list = await listRes.json();
           const found = list.find(x => x.symbol.toLowerCase() === symbol.toLowerCase());
-          if (found) {
-            res = await fetchCoinGecko(found.id, range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
-          }
+          if (found) res = await fetchCoinGecko(found.id, range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
         }
         if (res && res.ohlc && res.ohlc.length > 0) {
-          renderOHLC(res.ohlc, symbol, 'ma50'); // Default to MA50
+          renderChart(res.ohlc, symbol);
           $('chartUpdated').textContent = res.last ? new Date(res.last).toLocaleString() : '--';
-          updateAdvisories(symbol, res.ohlc);
+          updateAdvisories(symbol, res);
         } else {
           $('chartTitle').textContent = `${symbol} (${range}) — No data`;
           $('chartUpdated').textContent = '--';
-          updateAdvisories(symbol, { error: 'No data available' });
+          updateAdvisories(symbol, { error: 'No data from APIs' });
         }
       } catch (e) {
-        console.error('Load symbol error:', e);
-        $('chartTitle').textContent = `${symbol} (${range}) — Error`;
+        console.error(`Load symbol error for ${symbol}:`, e);
+        $('chartTitle').textContent = `${symbol} (${range}) — Error: ${e.message}`;
         $('chartUpdated').textContent = '--';
         updateAdvisories(symbol, { error: e.message });
       }
@@ -443,7 +512,7 @@
             </div>
           `);
         } catch (e) {
-          nodes.push(`<div class="post"><h4>${s}</h4><div class="meta error">data error</div></div>`);
+          nodes.push(`<div class="post"><h4>${s}</h4><div class="meta error">data error: ${e.message}</div></div>`);
         }
       }
       area.innerHTML = nodes.join('');
@@ -463,6 +532,25 @@
           btn.classList.add('active');
           if (currentSymbol) loadSymbol(currentSymbol, btn.dataset.range);
         });
+      });
+
+      // Initialize chart type buttons
+      const chartTypes = ['candlestick', 'line', 'bar'];
+      const chartTypeDiv = $('chartType');
+      chartTypeDiv.innerHTML = chartTypes.map(t => `<button class="${t === 'candlestick' ? 'active' : ''}" data-type="${t}">${t.charAt(0).toUpperCase() + t.slice(1)}</button>`).join('');
+      chartTypeDiv.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          chartTypeDiv.querySelector('.active').classList.remove('active');
+          btn.classList.add('active');
+          currentChartType = btn.dataset.type;
+          if (currentSymbol) loadSymbol(currentSymbol, currentRange);
+        });
+      });
+
+      // Initialize indicator select
+      $('indicatorSelect').addEventListener('change', (e) => {
+        currentIndicator = e.target.value;
+        if (currentSymbol) loadSymbol(currentSymbol, currentRange);
       });
     }
 
@@ -484,7 +572,10 @@
       await loadAll();
       const first = getWatch()[0];
       if (first) loadSymbol(first);
-      setInterval(loadPosts, 120000);
+      setInterval(() => {
+        loadPosts();
+        if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) loadNews();
+      }, 120000); // Refresh every 2 minutes
     })();
   </script>
 </body>
