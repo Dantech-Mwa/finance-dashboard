@@ -8,49 +8,40 @@
 
   <!-- Chart.js + Financial plugin -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@3.0.0/dist/chartjs-chart-financial.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
 
   <style>
-    /* isolation reset */
     html,body{all:unset;display:block;height:100%}
     *{box-sizing:border-box}
     body{font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f6f8fb;margin:0;padding:18px;color:#0b2240}
     #app{max-width:1200px;margin:0 auto;background:#fff;border-radius:12px;padding:18px;border:1px solid #e6eef6;box-shadow:0 12px 40px rgba(13,30,50,0.06)}
-
     .header{display:flex;align-items:center;justify-content:space-between}
     .brand{display:flex;gap:12px;align-items:center}
     .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#e6f2ff,#fff);display:flex;align-items:center;justify-content:center;font-weight:800}
     .title{font-size:18px;font-weight:700}
     .subtitle{font-size:13px;color:#6b7b8c}
-
     .controls{display:flex;gap:8px;align-items:center}
     .controls input,.controls select{padding:8px;border-radius:8px;border:1px solid #dcebf7}
     .controls button{padding:8px 12px;border-radius:8px;border:none;background:#0b76d1;color:#fff;cursor:pointer}
-
     .grid{display:grid;grid-template-columns:320px 1fr;gap:18px;margin-top:16px}
     .left{display:flex;flex-direction:column;gap:12px}
     .card{background:#fff;border:1px solid #eef6fb;border-radius:10px;padding:12px}
-
     .chartCard{display:flex;flex-direction:column}
     .chartToolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
     .chartWrap{height:420px}
-
     .newsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
     .newsCard{background:#fff;border:1px solid #eef6fb;border-radius:8px;overflow:hidden;text-decoration:none;color:inherit;display:block}
     .newsCard img{width:100%;height:140px;object-fit:cover}
     .newsCard .body{padding:10px}
     .newsCard h5{margin:0 0 6px 0;font-size:15px}
     .newsCard .meta{font-size:12px;color:#6b7b8c}
-
     .postsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
     .post{padding:12px;border-radius:8px;background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid #eef6fb}
-
     footer{margin-top:18px;padding-top:12px;border-top:1px solid #eef6fb;display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
     .contact input,.contact textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #dcebf7;margin-top:8px}
     .contact button{margin-top:8px;padding:10px 12px;border-radius:8px;border:none;background:#0b76d1;color:#fff;cursor:pointer}
-
     .advice{background:linear-gradient(180deg,#fff,#fbfdff);padding:10px;border-radius:8px;border:1px solid #eef6fb}
-
     @media (max-width:1100px){.newsGrid{grid-template-columns:repeat(2,1fr)}.postsGrid{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
     @media (max-width:700px){.newsGrid{grid-template-columns:1fr}.postsGrid{grid-template-columns:1fr}}
   </style>
@@ -80,33 +71,27 @@
           <div id="watchlist">Loading…</div>
           <div style="margin-top:8px"><small class="meta">Tip: Add any global ticker (US/EU/Asia). For forex use EURUSD, for crypto use BTC, ETH etc.</small></div>
         </div>
-
         <div class="card">
           <h4>Quick Trade Advisories</h4>
           <div id="advisories" class="advice">Loading advisories…</div>
         </div>
-
         <div class="card">
           <h4>Crypto Suggestions</h4>
           <div id="cryptoAdvice" class="advice">Loading crypto suggestions…</div>
         </div>
       </aside>
-
       <section>
         <div class="card chartCard">
           <div class="chartToolbar">
             <div><strong id="chartTitle">Select a symbol</strong></div>
             <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
           </div>
-
           <div class="chartWrap"><canvas id="ohlcChart"></canvas></div>
-
           <div style="margin-top:12px">
             <strong>Market News</strong>
             <div class="newsGrid" id="newsGrid">Loading news…</div>
           </div>
         </div>
-
         <div class="card" style="margin-top:12px">
           <h4 style="margin-top:0">Market Watch Posts</h4>
           <div class="postsGrid" id="postsArea">Loading posts…</div>
@@ -119,7 +104,6 @@
         <div style="font-weight:700">Market Pulse</div>
         <div class="meta">Advanced dashboard — data via Alpha Vantage & CoinGecko</div>
       </div>
-
       <div class="contact card" style="width:360px">
         <strong>Contact</strong>
         <div class="meta">Messages will be prepared for: <strong>wambuamwanza6@gmail.com</strong></div>
@@ -133,189 +117,397 @@
   </div>
 
   <script>
-    // ========== CONFIG ===========
+    // CONFIG
     const ALPHA_KEY = 'INZ7GV3B33PXV2QM';
-    const ALLORIGINS = 'https://api.allorigins.win/raw?url='; // proxy to fetch og:image when needed
+    const ALLORIGINS = 'https://api.allorigins.win/raw?url=';
 
-    // helpers
+    // Helpers
     const $ = id => document.getElementById(id);
 
-    // WATCHLIST storage
-    function getWatch(){try{return JSON.parse(localStorage.getItem('mp_watch')||'["AAPL","MSFT","GOOGL","TSLA","AMZN"]')}catch(e){return ['AAPL','MSFT','GOOGL','TSLA','AMZN']}}
-    function saveWatch(a){localStorage.setItem('mp_watch', JSON.stringify(a))}
-
-    function renderWatch(){
-      const list=getWatch();
-      if(list.length===0){$('watchlist').textContent='No symbols.';return}
-      $('watchlist').innerHTML = list.map(s=>`<div style='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #f1f6fb'><div><strong>${s}</strong></div><div><button data-sym='${s}' class='viewBtn'>View</button> <button data-sym='${s}' class='rmBtn'>Remove</button></div></div>`).join('');
-      document.querySelectorAll('.viewBtn').forEach(b=>b.addEventListener('click',()=>loadSymbol(b.dataset.sym)));
-      document.querySelectorAll('.rmBtn').forEach(b=>{b.addEventListener('click',()=>{ const s=b.dataset.sym; const arr=getWatch().filter(x=>x!==s); saveWatch(arr); renderWatch(); })});
+    // Watchlist storage
+    function getWatch() {
+      try {
+        return JSON.parse(localStorage.getItem('mp_watch') || '["AAPL","MSFT","GOOGL","TSLA","AMZN"]');
+      } catch (e) {
+        return ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
+      }
+    }
+    function saveWatch(a) {
+      localStorage.setItem('mp_watch', JSON.stringify(a));
     }
 
-    // add via controls
-    document.getElementById('loadBtn').addEventListener('click', ()=>{ const val = $('globalSearch').value.trim().toUpperCase(); if(!val) return; const arr=getWatch(); if(!arr.includes(val)){arr.unshift(val); saveWatch(arr); renderWatch();} $('globalSearch').value=''; loadSymbol(val); });
+    function renderWatch() {
+      const list = getWatch();
+      if (list.length === 0) {
+        $('watchlist').textContent = 'No symbols.';
+        return;
+      }
+      $('watchlist').innerHTML = list.map(s => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #f1f6fb">
+          <div><strong>${s}</strong></div>
+          <div>
+            <button data-sym="${s}" class="viewBtn">View</button>
+            <button data-sym="${s}" class="rmBtn">Remove</button>
+          </div>
+        </div>
+      `).join('');
+      document.querySelectorAll('.viewBtn').forEach(b => b.addEventListener('click', () => loadSymbol(b.dataset.sym)));
+      document.querySelectorAll('.rmBtn').forEach(b => {
+        b.addEventListener('click', () => {
+          const arr = getWatch().filter(x => x !== b.dataset.sym);
+          saveWatch(arr);
+          renderWatch();
+        });
+      });
+    }
 
-    // ========== TIME SERIES FETCH & OHLC conversion ============
-    async function fetchAlphaIntraday(symbol, interval){
+    // Add via controls
+    $('loadBtn').addEventListener('click', () => {
+      const val = $('globalSearch').value.trim().toUpperCase();
+      if (!val) return;
+      const arr = getWatch();
+      if (!arr.includes(val)) {
+        arr.unshift(val);
+        saveWatch(arr);
+        renderWatch();
+      }
+      $('globalSearch').value = '';
+      loadSymbol(val);
+    });
+
+    // TIME SERIES FETCH & OHLC conversion
+    async function fetchAlphaIntraday(symbol, interval) {
       const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=full&apikey=${ALPHA_KEY}`;
-      const r = await fetch(url); const j = await r.json();
-      // Try different field keys
-      const ts = j['Time Series ('+interval+')'] || j['Time Series (5min)'] || j['Time Series (15min)'] || j['Time Series (60min)'] || null;
-      if(!ts) return {error:j};
-      // convert to OHLC array for chartjs-financial
-      const keys = Object.keys(ts).sort();
-      const ohlc = keys.map(k=>({t: new Date(k), o: Number(ts[k]['1. open']), h: Number(ts[k]['2. high']), l: Number(ts[k]['3. low']), c: Number(ts[k]['4. close'])}));
-      return {ohlc, last: keys[keys.length-1]};
+      try {
+        const r = await fetch(url);
+        const j = await r.json();
+        const ts = j[`Time Series (${interval})`] || null;
+        if (!ts) return { error: j };
+        const keys = Object.keys(ts).sort();
+        const ohlc = keys.map(k => ({
+          t: new Date(k).getTime(),
+          o: Number(ts[k]['1. open']),
+          h: Number(ts[k]['2. high']),
+          l: Number(ts[k]['3. low']),
+          c: Number(ts[k]['4. close'])
+        }));
+        return { ohlc, last: keys[keys.length - 1] };
+      } catch (e) {
+        return { error: e.message };
+      }
     }
 
-    // fallback for FX
-    async function fetchAlphaFX(from, to, interval){
+    async function fetchAlphaFX(from, to, interval) {
       const url = `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${from}&to_symbol=${to}&interval=${interval}&outputsize=full&apikey=${ALPHA_KEY}`;
-      const r=await fetch(url); const j=await r.json();
-      const ts = j['Time Series FX ('+interval+')'] || j['Time Series FX (60min)'] || null;
-      if(!ts) return {error:j};
-      const keys = Object.keys(ts).sort();
-      const ohlc = keys.map(k=>({t:new Date(k), o: Number(ts[k]['1. open']), h:Number(ts[k]['2. high']), l:Number(ts[k]['3. low']), c:Number(ts[k]['4. close'])}));
-      return {ohlc, last: keys[keys.length-1]};
+      try {
+        const r = await fetch(url);
+        const j = await r.json();
+        const ts = j[`Time Series FX (${interval})`] || null;
+        if (!ts) return { error: j };
+        const keys = Object.keys(ts).sort();
+        const ohlc = keys.map(k => ({
+          t: new Date(k).getTime(),
+          o: Number(ts[k]['1. open']),
+          h: Number(ts[k]['2. high']),
+          l: Number(ts[k]['3. low']),
+          c: Number(ts[k]['4. close'])
+        }));
+        return { ohlc, last: keys[keys.length - 1] };
+      } catch (e) {
+        return { error: e.message };
+      }
     }
 
-    // crypto market chart via CoinGecko
-    async function fetchCoinGecko(id){
-      const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=1`);
-      if(r.status!==200) return null; const j=await r.json(); // [[timestamp, open, high, low, close],...]
-      const ohlc = j.map(item=>({t:new Date(item[0]), o:item[1], h:item[2], l:item[3], c:item[4]}));
-      return {ohlc, last: ohlc.length? ohlc[ohlc.length-1].t : null};
+    async function fetchCoinGecko(id) {
+      try {
+        const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=1`);
+        if (r.status !== 200) return null;
+        const j = await r.json();
+        const ohlc = j.map(item => ({
+          t: item[0],
+          o: item[1],
+          h: item[2],
+          l: item[3],
+          c: item[4]
+        }));
+        return { ohlc, last: ohlc.length ? new Date(ohlc[ohlc.length - 1].t).toISOString() : null };
+      } catch (e) {
+        return null;
+      }
     }
 
-    // render candlestick chart
+    // Render candlestick chart
     let ohlcChart = null;
-    function renderOHLC(ohlc, label, maOption){
+    function renderOHLC(ohlc, label, maOption) {
       const ctx = $('ohlcChart').getContext('2d');
-      if(ohlcChart) ohlcChart.destroy();
-      const data = {datasets:[{label:label,data:ohlc,type:'candlestick'}]};
+      if (ohlcChart) ohlcChart.destroy();
+      const datasets = [{
+        label: label,
+        data: ohlc,
+        type: 'candlestick',
+        borderColor: {
+          up: '#00cc00',
+          down: '#ff3333',
+          unchanged: '#999999'
+        }
+      }];
 
-      // optional MA overlay
-      if(maOption && maOption!=='none'){
-        const n = Number(maOption.replace('ma',''));
-        const closes = ohlc.map(d=>d.c);
-        const ma = simpleMovingAverage(closes,n);
-        data.datasets.push({label:`MA${n}`,type:'line',data:ma.map((v,i)=>({x:ohlc[i].t,y:v})),borderColor:'#ff7f0e',backgroundColor:'rgba(255,127,14,0.08)',tension:0.2,pointRadius:0});
+      if (maOption && maOption !== 'none') {
+        const n = Number(maOption.replace('ma', ''));
+        const closes = ohlc.map(d => d.c);
+        const ma = simpleMovingAverage(closes, n);
+        datasets.push({
+          label: `MA${n}`,
+          type: 'line',
+          data: ma.map((v, i) => ({ x: ohlc[i].t, y: v })),
+          borderColor: '#ff7f0e',
+          backgroundColor: 'rgba(255,127,14,0.08)',
+          tension: 0.2,
+          pointRadius: 0
+        });
       }
 
-      ohlcChart = new Chart(ctx,{type:'candlestick',data:data,options:{plugins:{legend:{display:true}},scales:{x:{type:'time'}}}});
-    }
-
-    // simple moving average helper
-    function simpleMovingAverage(arr,n){
-      const res = []; for(let i=0;i<arr.length;i++){ if(i<n-1) res.push(null); else{ let sum=0; for(let j=0;j<n;j++) sum += arr[i-j]; res.push(sum/n); } } return res;
-    }
-
-    // ========== NEWS with og:image fallback using AllOrigins ===========
-    async function fetchOGImage(url){
-      try{
-        const r = await fetch(ALLORIGINS + encodeURIComponent(url));
-        if(!r.ok) return null; const txt = await r.text();
-        const m = txt.match(/<meta property="og:image" content="([^"]+)"/i) || txt.match(/<meta name="og:image" content="([^"]+)"/i) || txt.match(/<meta property='og:image' content='([^']+)'/i);
-        if(m && m[1]) return m[1];
-        // fallback to twitter:image
-        const m2 = txt.match(/<meta name="twitter:image" content="([^"]+)"/i);
-        return m2 && m2[1] ? m2[1] : null;
-      }catch(e){console.warn('og fetch fail',e);return null}
-    }
-
-    async function loadNews(){
-      try{
-        const feeds = ['https://feeds.reuters.com/reuters/businessNews','http://feeds.bbci.co.uk/news/business/rss.xml','https://www.cnbc.com/id/10001147/device/rss/rss.html'];
-        let items=[];
-        for(const f of feeds){
-          try{ const r = await fetch('https://api.rss2json.com/v1/api.json?rss_url='+encodeURIComponent(f)); const j=await r.json(); if(j.items) items.push(...j.items); }catch(e){console.warn('feed',f,'failed',e)}
+      ohlcChart = new Chart(ctx, {
+        type: 'candlestick',
+        data: { datasets },
+        options: {
+          plugins: { legend: { display: true } },
+          scales: {
+            x: {
+              type: 'time',
+              time: { unit: 'minute' },
+              adapters: { date: { locale: 'en' } }
+            },
+            y: { beginAtZero: false }
+          }
         }
-        if(items.length===0){$('newsGrid').textContent='No news';return}
-        const top = items.slice(0,9);
+      });
+    }
+
+    function simpleMovingAverage(arr, n) {
+      const res = [];
+      for (let i = 0; i < arr.length; i++) {
+        if (i < n - 1) res.push(null);
+        else {
+          let sum = 0;
+          for (let j = 0; j < n; j++) sum += arr[i - j];
+          res.push(sum / n);
+        }
+      }
+      return res;
+    }
+
+    // News with og:image fallback
+    async function fetchOGImage(url) {
+      try {
+        const r = await fetch(ALLORIGINS + encodeURIComponent(url));
+        if (!r.ok) return null;
+        const txt = await r.text();
+        const m = txt.match(/<meta property="og:image" content="([^"]+)"/i) ||
+                  txt.match(/<meta name="og:image" content="([^"]+)"/i) ||
+                  txt.match(/<meta property='og:image' content='([^']+)'/i) ||
+                  txt.match(/<meta name="twitter:image" content="([^"]+)"/i);
+        return m && m[1] ? m[1] : null;
+      } catch (e) {
+        console.warn('og fetch fail', e);
+        return null;
+      }
+    }
+
+    async function loadNews() {
+      try {
+        const feeds = [
+          'https://feeds.reuters.com/reuters/businessNews',
+          'http://feeds.bbci.co.uk/news/business/rss.xml',
+          'https://www.cnbc.com/id/10001147/device/rss/rss.html'
+        ];
+        let items = [];
+        for (const f of feeds) {
+          try {
+            const r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(f));
+            const j = await r.json();
+            if (j.items) items.push(...j.items);
+          } catch (e) {
+            console.warn('feed', f, 'failed', e);
+          }
+        }
+        if (items.length === 0) {
+          $('newsGrid').textContent = 'No news';
+          return;
+        }
+        const top = items.slice(0, 9);
         const nodes = [];
-        for(const it of top){
+        for (const it of top) {
           let img = it.thumbnail || it.enclosure?.link || null;
-          if(!img){ img = await fetchOGImage(it.link); }
-          if(!img) img = 'https://via.placeholder.com/600x400?text=News';
-          nodes.push(`<a class='newsCard' href='${it.link}' target='_blank' rel='noreferrer'><img src='${img}' alt='thumb'><div class='body'><h5>${it.title}</h5><div class='meta'>${it.author||it.source||''}</div></div></a>`);
+          if (!img) img = await fetchOGImage(it.link);
+          if (!img) img = 'https://via.placeholder.com/600x400?text=News';
+          nodes.push(`
+            <a class="newsCard" href="${it.link}" target="_blank" rel="noreferrer">
+              <img src="${img}" alt="thumb">
+              <div class="body">
+                <h5>${it.title}</h5>
+                <div class="meta">${it.author || it.source || ''}</div>
+              </div>
+            </a>
+          `);
         }
         $('newsGrid').innerHTML = nodes.join('');
-      }catch(e){console.error(e);$('newsGrid').textContent='Error loading news.'}
+      } catch (e) {
+        console.error(e);
+        $('newsGrid').textContent = 'Error loading news.';
+      }
     }
 
-    // ========== TRADING ADVISORY RULES (simple heuristics) ===========
-    function computeSignalsFromOHLC(ohlc){
-      // Simple signals: MA cross and recent momentum
-      const closes = ohlc.map(d=>d.c);
-      const ma10 = closes.map((v,i)=> i<9?null: closes.slice(i-9,i+1).reduce((a,b)=>a+b,0)/10);
-      const ma50 = closes.map((v,i)=> i<49?null: closes.slice(i-49,i+1).reduce((a,b)=>a+b,0)/50);
-      const latest = closes[closes.length-1];
-      const idx = closes.length-1;
-      const signal = {recommendation:'Hold', reason:'No clear signal'};
-      if(ma10[idx] && ma50[idx]){
-        if(ma10[idx] > ma50[idx]){ signal.recommendation='Buy'; signal.reason='MA10 crossed above MA50 (bullish)'; }
-        else if(ma10[idx] < ma50[idx]){ signal.recommendation='Sell'; signal.reason='MA10 below MA50 (bearish)'; }
+    // Trading advisory rules
+    function computeSignalsFromOHLC(ohlc) {
+      const closes = ohlc.map(d => d.c);
+      const ma10 = closes.map((v, i) => i < 9 ? null : closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10);
+      const ma50 = closes.map((v, i) => i < 49 ? null : closes.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50);
+      const latest = closes[closes.length - 1];
+      const idx = closes.length - 1;
+      const signal = { recommendation: 'Hold', reason: 'No clear signal' };
+      if (ma10[idx] && ma50[idx]) {
+        if (ma10[idx] > ma50[idx]) {
+          signal.recommendation = 'Buy';
+          signal.reason = 'MA10 crossed above MA50 (bullish)';
+        } else if (ma10[idx] < ma50[idx]) {
+          signal.recommendation = 'Sell';
+          signal.reason = 'MA10 below MA50 (bearish)';
+        }
       }
-      // momentum
-      const prev = closes[closes.length-5] || closes[0];
-      const changePct = ((latest - prev)/prev)*100;
-      if(Math.abs(changePct) > 2){ signal.momentum = changePct.toFixed(2)+'% over last 5 intervals'; }
+      const prev = closes[closes.length - 5] || closes[0];
+      const changePct = ((latest - prev) / prev) * 100;
+      if (Math.abs(changePct) > 2) {
+        signal.momentum = changePct.toFixed(2) + '% over last 5 intervals';
+      }
       return signal;
     }
 
-    async function updateAdvisories(symbol, ohlc){
+    async function updateAdvisories(symbol, ohlc) {
       const s = computeSignalsFromOHLC(ohlc);
-      $('advisories').innerHTML = `<strong>${symbol}</strong><div style='margin-top:6px'>Recommendation: <strong>${s.recommendation}</strong></div><div class='meta' style='margin-top:6px'>${s.reason}</div>${s.momentum?`<div class='meta' style='margin-top:6px'>Momentum: ${s.momentum}</div>`:''}<div style='margin-top:10px;font-size:13px'>Forex advisory: Use tight stops for high volatility. Always size positions to risk <2% equity. Crypto: prefer dollar-cost averaging for long-term exposure.</div>`;
+      $('advisories').innerHTML = `
+        <strong>${symbol}</strong>
+        <div style="margin-top:6px">Recommendation: <strong>${s.recommendation}</strong></div>
+        <div class="meta" style="margin-top:6px">${s.reason}</div>
+        ${s.momentum ? `<div class="meta" style="margin-top:6px">Momentum: ${s.momentum}</div>` : ''}
+        <div style="margin-top:10px;font-size:13px">Forex advisory: Use tight stops for high volatility. Always size positions to risk <2% equity. Crypto: prefer dollar-cost averaging for long-term exposure.</div>
+      `;
     }
 
-    // crypto suggestions based on 24h change & volume
-    async function loadCryptoAdvice(){
-      try{
+    async function loadCryptoAdvice() {
+      try {
         const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false');
         const js = await r.json();
-        const nodes = js.map(c=>{ const change = Number(c.price_change_percentage_24h).toFixed(2); let rec='Hold'; if(change>5 && c.total_volume>50000000) rec='Consider Selling (strong run)'; if(change<-7 && c.total_volume>20000000) rec='Consider Buying (pullback)'; return `<div style='padding:6px 0;border-bottom:1px dashed #f1f6fb'><strong>${c.symbol.toUpperCase()}</strong> ${c.current_price.toLocaleString()}<div class='meta'>24h: ${change}% · Vol: $${Number(c.total_volume).toLocaleString()}</div><div style='margin-top:6px'><em>${rec}</em></div></div>`});
+        const nodes = js.map(c => {
+          const change = Number(c.price_change_percentage_24h).toFixed(2);
+          let rec = 'Hold';
+          if (change > 5 && c.total_volume > 50000000) rec = 'Consider Selling (strong run)';
+          if (change < -7 && c.total_volume > 20000000) rec = 'Consider Buying (pullback)';
+          return `
+            <div style="padding:6px 0;border-bottom:1px dashed #f1f6fb">
+              <strong>${c.symbol.toUpperCase()}</strong> ${c.current_price.toLocaleString()}
+              <div class="meta">24h: ${change}% · Vol: $${Number(c.total_volume).toLocaleString()}</div>
+              <div style="margin-top:6px"><em>${rec}</em></div>
+            </div>
+          `;
+        });
         $('cryptoAdvice').innerHTML = nodes.join('');
-      }catch(e){$('cryptoAdvice').textContent='Failed to load crypto suggestions.'}
+      } catch (e) {
+        $('cryptoAdvice').textContent = 'Failed to load crypto suggestions.';
+      }
     }
 
-    // ========== LOAD SYMBOL: unified for stock, fx, crypto ===========
-    async function loadSymbol(symbol){
-      if(!symbol) return; symbol = symbol.toUpperCase(); $('chartTitle').textContent = 'Loading ' + symbol + '...';
+    // Load symbol: unified for stock, fx, crypto
+    async function loadSymbol(symbol) {
+      if (!symbol) return;
+      symbol = symbol.toUpperCase();
+      $('chartTitle').textContent = 'Loading ' + symbol + '...';
       const interval = $('intervalSel').value;
-      // try stock intraday
-      try{
+      try {
         let res = await fetchAlphaIntraday(symbol, interval);
-        if(res.error){ // try FX
-          if(symbol.length===6){ const from=symbol.slice(0,3), to=symbol.slice(3); res = await fetchAlphaFX(from,to,interval); }
+        if (res.error && symbol.length === 6) {
+          const from = symbol.slice(0, 3);
+          const to = symbol.slice(3);
+          res = await fetchAlphaFX(from, to, interval);
         }
-        if(res.error){ // try coin
-          // search coingecko list
-          const listRes = await fetch('https://api.coingecko.com/api/v3/coins/list'); const list = await listRes.json(); const found = list.find(x=>x.symbol.toLowerCase()===symbol.toLowerCase());
-          if(found){ const cg = await fetchCoinGecko(found.id); if(cg){ renderOHLC(cg.ohlc, symbol, $('maSel').value); $('chartUpdated').textContent = cg.last||'--'; await updateAdvisories(symbol, cg.ohlc); return; } }
-          $('chartTitle').textContent = symbol + ' — no intraday data'; return;
+        if (res.error) {
+          const listRes = await fetch('https://api.coingecko.com/api/v3/coins/list');
+          const list = await listRes.json();
+          const found = list.find(x => x.symbol.toLowerCase() === symbol.toLowerCase());
+          if (found) {
+            const cg = await fetchCoinGecko(found.id);
+            if (cg) {
+              renderOHLC(cg.ohlc, symbol, $('maSel').value);
+              $('chartUpdated').textContent = cg.last || '--';
+              await updateAdvisories(symbol, cg.ohlc);
+              return;
+            }
+          }
+          $('chartTitle').textContent = symbol + ' — no intraday data';
+          return;
         }
-        // render
         renderOHLC(res.ohlc, symbol, $('maSel').value);
         $('chartUpdated').textContent = res.last || '--';
         await updateAdvisories(symbol, res.ohlc);
-      }catch(err){console.error(err); $('chartTitle').textContent = symbol + ' — error'; }
+      } catch (err) {
+        console.error(err);
+        $('chartTitle').textContent = symbol + ' — error';
+      }
     }
 
-    // ========== POSTS & lists ==============
-    async function loadPosts(){
-      const watch = getWatch(); const area = $('postsArea'); area.innerHTML='';
+    // Posts
+    async function loadPosts() {
+      const watch = getWatch();
+      const area = $('postsArea');
+      area.innerHTML = '';
       const nodes = [];
-      for(const s of watch.slice(0,9)){
-        try{ const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${s}&apikey=${ALPHA_KEY}`); const j = await r.json(); const q = j['Global Quote']; const price=q?Number(q['05. price']).toFixed(2):'—'; const ch=q?(q['10. change percent']||'—'):'—'; nodes.push(`<div class='post'><h4>${s}</h4><div class='meta'>${price} · ${ch}</div><div style='margin-top:8px'><a href='#' onclick="loadSymbol('${s}');return false;">View chart</a></div></div>`);}catch(e){nodes.push(`<div class='post'><h4>${s}</h4><div class='meta'>data error</div></div>`)} }
+      for (const s of watch.slice(0, 9)) {
+        try {
+          const r = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${s}&apikey=${ALPHA_KEY}`);
+          const j = await r.json();
+          const q = j['Global Quote'];
+          const price = q ? Number(q['05. price']).toFixed(2) : '—';
+          const ch = q ? (q['10. change percent'] || '—') : '—';
+          nodes.push(`
+            <div class="post">
+              <h4>${s}</h4>
+              <div class="meta">${price} · ${ch}</div>
+              <div style="margin-top:8px"><a href="#" onclick="loadSymbol('${s}');return false;">View chart</a></div>
+            </div>
+          `);
+        } catch (e) {
+          nodes.push(`<div class="post"><h4>${s}</h4><div class="meta">data error</div></div>`);
+        }
+      }
       area.innerHTML = nodes.join('');
     }
 
-    // ========== INIT & AUTO REFRESH ===========
-    async function loadAll(){ renderWatch(); await Promise.all([loadCryptoAdvice(), loadNews(), loadPosts()]); }
-    document.getElementById('sendBtn').addEventListener('click', ()=>{ const n=$('name').value.trim(); const e=$('email').value.trim(); const m=$('message').value.trim(); if(!n||!e||!m){$('sendStatus').textContent='Please fill all fields.'; return;} const subject = encodeURIComponent('Contact from '+n); const body = encodeURIComponent(m + '\n\nFrom: ' + n + ' <' + e + '>'); window.location.href = 'mailto:wambuamwanza6@gmail.com?subject='+subject+'&body='+body; });
-    // load previous watchlist or default
-    (async function boot(){ renderWatch(); await loadAll(); const first = getWatch()[0]; if(first) loadSymbol(first); // auto refresh every 60s
-      setInterval(()=>{ if(getWatch().length>0){ loadPosts(); } }, 120000);
+    // Init & auto refresh
+    async function loadAll() {
+      renderWatch();
+      await Promise.all([loadCryptoAdvice(), loadNews(), loadPosts()]);
+    }
+
+    $('sendBtn').addEventListener('click', () => {
+      const n = $('name').value.trim();
+      const e = $('email').value.trim();
+      const m = $('message').value.trim();
+      if (!n || !e || !m) {
+        $('sendStatus').textContent = 'Please fill all fields.';
+        return;
+      }
+      const subject = encodeURIComponent('Contact from ' + n);
+      const body = encodeURIComponent(m + '\n\nFrom: ' + n + ' <' + e + '>');
+      window.location.href = 'mailto:wambuamwanza6@gmail.com?subject=' + subject + '&body=' + body;
+    });
+
+    (async function boot() {
+      await loadAll();
+      const first = getWatch()[0];
+      if (first) loadSymbol(first);
+      setInterval(() => {
+        if (getWatch().length > 0) loadPosts();
+      }, 120000);
     })();
   </script>
 </body>
