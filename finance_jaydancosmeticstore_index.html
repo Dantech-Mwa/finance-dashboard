@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Market Pulse — Finance Dashboard</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+
+  <!-- ISOLATED LIGHT THEME STYLES (self-contained) -->
+  <style>
+    /* complete reset for isolation */
+    html,body{all:unset;display:block;height:100%;}
+    *{box-sizing:border-box}
+    body{font-family:Inter,Segoe UI,Segoe,Roboto,Arial,sans-serif;background:#f5f7fa;color:#111;margin:0;padding:0}
+
+    /* main shell */
+    #app{max-width:1200px;margin:28px auto;padding:22px;background:linear-gradient(180deg,#ffffff,#f7f9fb);border-radius:12px;box-shadow:0 10px 30px rgba(22,31,41,0.08);border:1px solid #e6eef6}
+
+    /* header */
+    .header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#cbd5e1,#fff);display:flex;align-items:center;justify-content:center;font-weight:800;color:#0b2240;font-size:18px;border:1px solid #e7eef9}
+    .title{font-size:20px;font-weight:700;color:#0b2240}
+    .subtitle{font-size:13px;color:#556b81}
+
+    /* controls */
+    .controls{display:flex;gap:8px;align-items:center}
+    .controls input{padding:8px 10px;border-radius:8px;border:1px solid #d9e6f2;background:#fff}
+    .controls button{padding:9px 14px;border-radius:8px;border:none;background:#0b76d1;color:#fff;font-weight:700;cursor:pointer}
+
+    /* top layout */
+    .top{display:grid;grid-template-columns:320px 1fr;gap:18px;margin-top:18px}
+    .sidebar{display:flex;flex-direction:column;gap:16px}
+
+    .card{background:#ffffff;border:1px solid #e6eef6;border-radius:10px;padding:12px}
+    .card h3{margin:0 0 8px 0;color:#0b2240}
+    .small-list{max-height:240px;overflow:auto}
+
+    .chartCard{display:flex;flex-direction:column;padding:12px;height:340px}
+    .chartHeader{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+
+    /* posts */
+    .postsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+    .post{padding:12px;border-radius:8px;border:1px solid #eef6fb;background:linear-gradient(180deg,#fff,#fbfdff)}
+    .post h4{margin:0 0 6px 0;font-size:15px}
+    .meta{font-size:12px;color:#6b7b8c}
+
+    /* aggregated headlines */
+    .headlines{margin-top:18px}
+    .headlineGroup{margin-bottom:12px}
+    .headlineGroup strong{display:block;color:#0b2240}
+    .headlineGroup ul{margin:6px 0 0 18px;color:#4f6071}
+
+    footer{margin-top:22px;text-align:center;color:#667889;font-size:13px}
+
+    /* thumbnails */
+    .thumbs{display:flex;gap:10px;overflow:auto;margin-top:8px}
+    .thumb{min-width:160px;border-radius:8px;border:1px solid #e6eef6;overflow:hidden;background:#fff}
+    .thumb img{width:100%;height:90px;object-fit:cover}
+    .thumb p{padding:8px;font-size:13px;color:#34495e;margin:0}
+
+    /* responsive */
+    @media (max-width:1100px){.postsGrid{grid-template-columns:repeat(2,1fr)}.top{grid-template-columns:1fr}}
+    @media (max-width:700px){.postsGrid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div id="app" role="main">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">MP</div>
+        <div>
+          <div class="title">Market Pulse</div>
+          <div class="subtitle">Stocks · Crypto · Forex · Global headlines</div>
+        </div>
+      </div>
+      <div class="controls">
+        <input id="symbol" value="AAPL" aria-label="symbol">
+        <button id="loadBtn">Load</button>
+      </div>
+    </header>
+
+    <section class="top">
+      <aside class="sidebar">
+        <div class="card">
+          <h3>Crypto — Top by 24h Volume</h3>
+          <div class="small-list" id="cryptoList">Loading…</div>
+        </div>
+
+        <div class="card">
+          <h3>Market News Thumbnails</h3>
+          <div class="thumbs" id="newsThumbs">Loading…</div>
+        </div>
+      </aside>
+
+      <div class="card chartCard">
+        <div class="chartHeader">
+          <div>
+            <div style="font-weight:700;color:#0b2240" id="chartTitle">Stock — AAPL</div>
+            <div class="meta">Alpha Vantage · Intraday (5min)</div>
+          </div>
+          <div class="meta">Updated: <span id="chartUpdated">—</span></div>
+        </div>
+        <canvas id="stockChart" style="flex:1;max-height:260px"></canvas>
+      </div>
+    </section>
+
+    <section class="postsGrid" id="postsArea">
+      <!-- dynamic posts -->
+    </section>
+
+    <section class="card headlines" id="aggregatedHeadlines">
+      <h3 style="margin-top:0">Headlines — same story from multiple outlets</h3>
+      Loading…
+    </section>
+
+    <footer>© Market Pulse — Data: Alpha Vantage (key provided), CoinGecko, public RSS feeds.</footer>
+  </div>
+
+  <script>
+    // ============ CONFIG ============
+    const ALPHA_KEY = 'INZ7GV3B33PXV2QM'; // user-provided
+
+    // Helper
+    const $ = id => document.getElementById(id);
+
+    // ---------- Crypto (CoinGecko) ----------
+    async function loadCrypto(){
+      try{
+        const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_desc&per_page=6&page=1&sparkline=false');
+        const js = await r.json();
+        $('cryptoList').innerHTML = js.map(c=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #eef6fb"><div style="display:flex;gap:8px;align-items:center"><img src='${c.image}' style='width:28px;height:28px;border-radius:14px'> <strong>${c.symbol.toUpperCase()}</strong></div><div style='text-align:right'><div>$${Number(c.current_price).toLocaleString()}</div><div style='font-size:12px;color:#667889'>Vol24h: $${Number(c.total_volume).toLocaleString()}</div></div></div>`).join('');
+      }catch(e){$('cryptoList').textContent='Failed to load crypto.';console.error(e)}
+    }
+
+    // ---------- News Thumbnails & Aggregation (RSS fallback) ----------
+    async function loadNews(){
+      try{
+        // Primary: Reuters Business RSS via rss2json
+        const rss = 'https://feeds.reuters.com/reuters/businessNews';
+        const api = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(rss);
+        const r = await fetch(api);
+        const j = await r.json();
+        const items = j.items || [];
+
+        // thumbnails
+        $('newsThumbs').innerHTML = items.slice(0,6).map(it=>`<a href='${it.link}' target='_blank' class='thumb'><img src='${it.thumbnail||'https://via.placeholder.com/320x180?text=News'}'><p>${it.title}</p></a>`).join('');
+
+        // aggregated headlines simple grouping
+        const groups = {};
+        items.slice(0,40).forEach(a=>{
+          const key = a.title ? a.title.split(' - ')[0].split(' — ')[0].slice(0,60) : 'Other';
+          groups[key] = groups[key]||[]; groups[key].push(a);
+        });
+        $('aggregatedHeadlines').innerHTML = '<h3 style="margin-top:0">Headlines — same story from multiple outlets</h3>' + Object.keys(groups).slice(0,8).map(k=>{
+          const list = groups[k].slice(0,6).map(x=>`<li><a href='${x.link}' target='_blank' style='color:#0b76d1'>${x.title}</a> <span style='color:#667889;font-size:12px'> — ${x.pubDate ? new Date(x.pubDate).toLocaleString():''}</span></li>`).join('');
+          return `<div class='headlineGroup'><strong>${k}</strong><ul>${list}</ul></div>`
+        }).join('');
+
+      }catch(e){$('newsThumbs').textContent='Failed to load news.';console.error(e)}
+    }
+
+    // ---------- Stock Chart (Alpha Vantage) ----------
+    let chartInstance = null;
+    async function loadStock(sym='AAPL'){
+      try{
+        $('chartTitle').textContent = 'Stock — ' + sym;
+        $('chartUpdated').textContent = 'loading...';
+        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${encodeURIComponent(sym)}&interval=5min&outputsize=compact&apikey=${ALPHA_KEY}`;
+        const r = await fetch(url);
+        const j = await r.json();
+        if(j['Note'] || j['Error Message']){ console.error(j); $('chartUpdated').textContent = 'AlphaVantage limit or error'; return; }
+        const ts = j['Time Series (5min)'] || {};
+        const labels = Object.keys(ts).sort();
+        const data = labels.map(k=>Number(ts[k]['4. close']));
+        $('chartUpdated').textContent = labels[labels.length-1] || '--';
+
+        const ctx = $('stockChart').getContext('2d');
+        if(chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx,{
+          type:'line',
+          data:{labels:labels, datasets:[{label:sym, data:data, borderColor:'#0b76d1', backgroundColor:'rgba(11,118,209,0.08)', tension:0.2, pointRadius:0}]},
+          options:{plugins:{legend:{display:false}},scales:{x:{display:false}}}
+        });
+      }catch(e){console.error(e);$('chartUpdated').textContent='Error loading chart'}
+    }
+
+    // ---------- Posts (watchlist summary) ----------
+    async function loadPosts(){
+      try{
+        const watch = ['AAPL','MSFT','GOOGL','AMZN','TSLA','NVDA'];
+        const area = $('postsArea'); area.innerHTML = '';
+        const promises = watch.map(s=>fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${s}&apikey=${ALPHA_KEY}`).then(r=>r.json()).catch(()=>null));
+        const results = await Promise.all(promises);
+        const html = results.map((res,i)=>{
+          const s = watch[i];
+          const q = res && res['Global Quote'] ? res['Global Quote'] : null;
+          const price = q ? Number(q['05. price']).toFixed(2): '—';
+          const ch = q ? (q['10. change percent']||'—') : '—';
+          return `<div class='post'><h4>${s}</h4><div class='meta'>Price: <strong>$${price}</strong> · Change: <span>${ch}</span></div><p style='margin-top:8px;color:#667889;font-size:13px'>Live price via Alpha Vantage. <a href='#' onclick="document.getElementById('symbol').value='${s}'; document.getElementById('loadBtn').click(); return false;">View chart</a></p></div>`
+        }).join('');
+        area.innerHTML = html;
+      }catch(e){$('postsArea').textContent='Failed to load posts.';console.error(e)}
+    }
+
+    // init and events
+    document.getElementById('loadBtn').addEventListener('click', ()=>{ const s = document.getElementById('symbol').value.trim()||'AAPL'; loadStock(s); });
+
+    (function init(){ loadCrypto(); loadNews(); loadStock('AAPL'); loadPosts(); })();
+  </script>
+</body>
+</html>
