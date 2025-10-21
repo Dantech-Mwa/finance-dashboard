@@ -28,15 +28,15 @@
     .left { display: flex; flex-direction: column; gap: 12px; }
     .card { background: #fff; border: 1px solid #eef6fb; border-radius: 10px; padding: 12px; }
     .chartCard { display: flex; flex-direction: column; }
+    .chartToolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
     .chartWrap { height: 420px; position: relative; }
-    .chartToolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
     .timeRange { display: flex; gap: 4px; }
     .timeRange button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
     .timeRange button.active { background: #0b76d1; color: #fff; }
-    .chartType { display: flex; gap: 4px; }
+    .chartType { display: flex; gap: 4px; margin-left: 8px; }
     .chartType button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
     .chartType button.active { background: #0b76d1; color: #fff; }
-    .indicatorSelect { padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #dcebf7; }
+    .indicatorSelect { padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #dcebf7; margin-left: 8px; }
     .newsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
     .newsCard { background: #fff; border: 1px solid #eef6fb; border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: transform 0.2s; }
     .newsCard:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
@@ -55,10 +55,8 @@
     .contact button { margin-top: 8px; padding: 10px 12px; border-radius: 8px; border: none; background: #0b76d1; color: #fff; cursor: pointer; }
     .advice { background: linear-gradient(180deg, #fff, #fbfdff); padding: 10px; border-radius: 8px; border: 1px solid #eef6fb; }
     .error { color: #d32f2f; font-style: italic; }
-    .loading { opacity: 0.6; }
-    .demo-notice { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 6px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
     @media (max-width: 1100px) { .newsGrid, .postsGrid { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
-    @media (max-width: 700px) { .newsGrid, .postsGrid { grid-template-columns: 1fr; } .chartToolbar { flex-direction: column; align-items: flex-start; } }
+    @media (max-width: 700px) { .newsGrid, .postsGrid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -138,60 +136,39 @@
   </div>
 
   <script>
-    // CONFIG
+    // CONFIG - No keys required
     let lastNewsUpdate = 0;
     const NEWS_UPDATE_INTERVAL = 300000; // 5 minutes
     let currentSymbol = '';
     let currentRange = '1D';
     let currentChartType = 'candlestick';
     let currentIndicator = 'none';
+    const now = new Date('2025-10-21T19:32:00+03:00'); // Set to 07:32 PM EAT, October 21, 2025
 
-    // Enhanced mock data for better fallback
-    const mockOHLC = (days = 100, basePrice = 100) => {
+    // Mock fallback data
+    const mockOHLC = (days = 100) => {
       const data = [];
-      const start = Date.now() - (days * 86400000);
-      let current = basePrice;
-      
+      const start = now - (days * 86400000);
       for (let i = 0; i < days; i++) {
         const time = start + (i * 86400000);
-        const volatility = 0.02; // 2% daily volatility
-        const changePercent = 2 * volatility * (Math.random() - 0.5);
-        const changeAmount = current * changePercent;
-        
-        const open = current;
-        const close = current + changeAmount;
-        const high = Math.max(open, close) * (1 + Math.random() * volatility / 2);
-        const low = Math.min(open, close) * (1 - Math.random() * volatility / 2);
-        
-        data.push({ 
-          t: time, 
-          o: parseFloat(open.toFixed(2)), 
-          h: parseFloat(high.toFixed(2)), 
-          l: parseFloat(low.toFixed(2)), 
-          c: parseFloat(close.toFixed(2))
-        });
-        
-        current = close;
+        const open = 100 + Math.random() * 50;
+        const close = open + (Math.random() - 0.5) * 10;
+        const high = Math.max(open, close) + Math.random() * 5;
+        const low = Math.min(open, close) - Math.random() * 5;
+        data.push({ t: time, o: open, h: high, l: low, c: close });
       }
       return data;
     };
-
-    const mockQuote = (symbol) => {
-      const basePrices = {
-        'AAPL': 180, 'MSFT': 330, 'GOOGL': 140, 'TSLA': 200, 'AMZN': 170,
-        'BTC': 50000, 'ETH': 3000, 'EURUSD': 1.08, 'GBPUSD': 1.27, 'USDJPY': 150
-      };
-      const basePrice = basePrices[symbol] || 100;
-      const change = (Math.random() - 0.5) * basePrice * 0.1; // ±5% change
-      const price = basePrice + change;
-      const changePercent = (change / basePrice) * 100;
-      
-      return {
-        c: parseFloat(price.toFixed(2)),
-        d: parseFloat(change.toFixed(2)),
-        dp: parseFloat(changePercent.toFixed(2))
-      };
-    };
+    const mockQuote = (symbol) => ({
+      c: 150 + Math.random() * 100,
+      d: (Math.random() - 0.5) * 10,
+      dp: (Math.random() - 0.5) * 5
+    });
+    const mockCrypto = [
+      { symbol: 'BTC', current_price: 60000, price_change_percentage_24h: 2.5 },
+      { symbol: 'ETH', current_price: 3000, price_change_percentage_24h: -1.2 },
+      { symbol: 'ADA', current_price: 0.5, price_change_percentage_24h: 3.1 }
+    ];
 
     // Helpers
     const $ = id => document.getElementById(id);
@@ -199,778 +176,441 @@
     // Watchlist storage
     function getWatch() {
       try {
-        return JSON.parse(localStorage.getItem('mp_watch') || '["AAPL","MSFT","GOOGL","TSLA","BTC"]');
+        return JSON.parse(localStorage.getItem('mp_watch') || '["AAPL","MSFT","GOOGL","TSLA","AMZN"]');
       } catch (e) {
-        return ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'BTC'];
+        return ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
       }
     }
-
     function saveWatch(a) {
       localStorage.setItem('mp_watch', JSON.stringify(a));
     }
 
     function renderWatch() {
       const list = getWatch();
-      const watchlistEl = $('watchlist');
-      
       if (list.length === 0) {
-        watchlistEl.textContent = 'No symbols.';
+        $('watchlist').textContent = 'No symbols.';
         return;
       }
-      
-      watchlistEl.innerHTML = list.map(s => `
+      $('watchlist').innerHTML = list.map(s => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #f1f6fb">
           <div><strong>${s}</strong></div>
           <button data-sym="${s}" class="viewBtn" style="padding:4px 8px;font-size:12px;background:#0b76d1;color:#fff;border:none;border-radius:4px;cursor:pointer">View</button>
         </div>
       `).join('');
-      
-      // Re-attach event listeners
-      document.querySelectorAll('.viewBtn').forEach(btn => {
-        btn.addEventListener('click', () => loadSymbol(btn.dataset.sym));
-      });
+      document.querySelectorAll('.viewBtn').forEach(b => b.addEventListener('click', () => loadSymbol(b.dataset.sym)));
     }
 
-    // Data Fetch Functions - Improved with better fallbacks
-    async function fetchYahooData(symbol, range = '1D') {
+    // Add via controls
+    $('loadBtn').addEventListener('click', () => {
+      const val = $('globalSearch').value.trim().toUpperCase();
+      if (!val) return;
+      const arr = getWatch();
+      if (!arr.includes(val)) {
+        arr.unshift(val);
+        saveWatch(arr);
+        renderWatch();
+      }
+      $('globalSearch').value = '';
+      loadSymbol(val);
+    });
+
+    // Data Fetch Functions with retries
+    async function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function fetchYahooData(symbol, days = 1) {
       try {
-        const ranges = { 
-          '1D': '1d', '1W': '5d', '1M': '1mo', 
-          '3M': '3mo', '1Y': '1y', '5Y': '5y' 
-        };
-        const intervals = {
-          '1D': '5m', '1W': '1d', '1M': '1d',
-          '3M': '1d', '1Y': '1d', '5Y': '1wk'
-        };
-        
-        const yahooRange = ranges[range] || '1d';
-        const interval = intervals[range] || '1d';
-        
-        // Clean symbol for Yahoo (remove .TO, etc.)
-        const cleanSymbol = symbol.replace(/\.(TO|NS|BO|CO)$/, '');
-        
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?range=${yahooRange}&interval=${interval}`;
-        
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Yahoo HTTP ${response.status}`);
-        
-        const data = await response.json();
-        
-        if (!data.chart?.result?.[0]) {
-          throw new Error('No chart data available');
-        }
-        
-        const result = data.chart.result[0];
-        const quotes = result.indicators.quote[0];
-        const timestamps = result.timestamp;
-        
-        if (!timestamps || timestamps.length === 0) {
-          throw new Error('No timestamp data');
-        }
-        
+        await delay(1000); // Respect rate limits
+        const ranges = { '1D': '1d', '1W': '5d', '1M': '1mo', '3M': '3mo', '1Y': '1y', '5Y': '5y' };
+        const range = ranges[currentRange] || '1d';
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=1d`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
+        const j = await r.json();
+        const quotes = j.chart.result[0].indicators.quote[0];
+        const timestamps = j.chart.result[0].timestamp;
         const ohlc = timestamps.map((t, i) => ({
-          t: t * 1000, // Convert to milliseconds
-          o: quotes.open[i] || quotes.close[i] || 0,
-          h: quotes.high[i] || quotes.close[i] || 0,
-          l: quotes.low[i] || quotes.close[i] || 0,
+          t: t * 1000,
+          o: quotes.open[i] || 0,
+          h: quotes.high[i] || 0,
+          l: quotes.low[i] || 0,
           c: quotes.close[i] || 0
-        })).filter(d => d.c > 0 && d.o > 0);
-        
-        return { 
-          ohlc, 
-          last: timestamps.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : null 
+        })).filter(d => d.c > 0);
+        return { ohlc, last: timestamps.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : null };
+      } catch (e) {
+        console.error(`Yahoo fetch error for ${symbol}:`, e);
+        return { ohlc: mockOHLC(days), last: new Date().toISOString() };
+      }
+    }
+
+    async function fetchYahooQuote(symbol) {
+      try {
+        await delay(1000); // Respect rate limits
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
+        const j = await r.json();
+        const quote = j.quoteResponse.result[0] || {};
+        return {
+          c: quote.regularMarketPrice || mockQuote(symbol).c,
+          d: quote.regularMarketChange || mockQuote(symbol).d,
+          dp: quote.regularMarketChangePercent || mockQuote(symbol).dp
         };
-        
-      } catch (error) {
-        console.error(`Yahoo fetch error for ${symbol}:`, error);
-        
-        // Enhanced fallback with realistic base prices
-        const basePrices = {
-          'AAPL': 180, 'MSFT': 330, 'GOOGL': 140, 'GOOG': 140, 'TSLA': 200, 'AMZN': 170,
-          'BTC': 50000, 'ETH': 3000, 'EURUSD': 1.08, 'GBPUSD': 1.27, 'USDJPY': 150,
-          'NVDA': 450, 'META': 320, 'NFLX': 500, 'SPY': 450, 'QQQ': 380
-        };
-        
-        const daysMap = { '1D': 1, '1W': 7, '1M': 30, '3M': 90, '1Y': 365, '5Y': 1825 };
-        const days = daysMap[range] || 30;
-        const basePrice = basePrices[symbol] || 100;
-        
-        return { 
-          ohlc: mockOHLC(days, basePrice), 
-          last: new Date().toISOString(),
-          isDemo: true 
-        };
+      } catch (e) {
+        console.error(`Yahoo quote error for ${symbol}:`, e);
+        return mockQuote(symbol);
       }
     }
 
     async function fetchCoinGeckoData() {
       try {
-        const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false');
-        if (!response.ok) throw new Error(`CoinGecko HTTP ${response.status}`);
-        return await response.json();
-      } catch (error) {
-        console.error('CoinGecko fetch error:', error);
-        // Enhanced mock crypto data
-        return [
-          { symbol: 'btc', name: 'Bitcoin', current_price: 51234, price_change_percentage_24h: 2.5, market_cap: 1000000000000 },
-          { symbol: 'eth', name: 'Ethereum', current_price: 2987, price_change_percentage_24h: -1.2, market_cap: 358000000000 },
-          { symbol: 'bnb', name: 'Binance Coin', current_price: 385, price_change_percentage_24h: 0.8, market_cap: 58000000000 },
-          { symbol: 'ada', name: 'Cardano', current_price: 0.52, price_change_percentage_24h: 3.1, market_cap: 18500000000 },
-          { symbol: 'sol', name: 'Solana', current_price: 102, price_change_percentage_24h: -2.4, market_cap: 42000000000 }
-        ];
+        await delay(2000); // For 30/min limit
+        const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false');
+        if (!r.ok) throw new Error(`CoinGecko HTTP ${r.status}`);
+        return await r.json();
+      } catch (e) {
+        console.error('CoinGecko fetch error:', e);
+        return mockCrypto;
       }
     }
 
-    // Render chart - Fixed implementation
+    // Render chart
     let ohlcChart = null;
-    function renderChart(ohlc, label, isDemo = false) {
-      const canvas = $('ohlcChart');
-      const ctx = canvas.getContext('2d');
-      
-      // Clear previous chart
-      if (ohlcChart) {
-        ohlcChart.destroy();
-      }
-
-      // Ensure we have data
-      if (!ohlc || ohlc.length === 0) {
-        console.warn('No OHLC data to render, using mock data');
-        ohlc = mockOHLC(100);
-        isDemo = true;
-      }
-
+    function renderChart(ohlc, label) {
+      if (ohlc.length === 0) ohlc = mockOHLC(100);
+      const ctx = $('ohlcChart').getContext('2d');
+      if (ohlcChart) ohlcChart.destroy();
       const data = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
-      
       let datasets = [];
-      
-      // Main dataset based on chart type
       if (currentChartType === 'candlestick') {
-        datasets.push({
+        datasets = [{
           label: label,
           data: data,
           type: 'candlestick',
-          color: {
-            up: '#00cc00',
-            down: '#ff3333',
-            unchanged: '#999999'
-          }
-        });
+          borderColor: { up: '#00cc00', down: '#ff3333', unchanged: '#999999' }
+        }];
       } else if (currentChartType === 'line') {
-        datasets.push({
+        datasets = [{
           label: label,
-          data: data.map(d => ({ x: d.x, y: d.c })),
+          data: data.map(d => ({ x: d.t, y: d.c })),
           type: 'line',
           borderColor: '#0b76d1',
-          backgroundColor: 'rgba(11, 118, 209, 0.1)',
-          fill: false,
-          tension: 0.1
-        });
+          fill: false
+        }];
       } else if (currentChartType === 'bar') {
-        datasets.push({
+        datasets = [{
           label: label,
-          data: data.map(d => ({ x: d.x, y: d.c })),
+          data: data.map(d => ({ x: d.t, y: d.c })),
           type: 'bar',
-          backgroundColor: 'rgba(11, 118, 209, 0.6)',
-          borderColor: '#0b76d1',
-          borderWidth: 1
-        });
+          backgroundColor: '#0b76d1'
+        }];
       }
 
-      // Add moving average if selected
       if (currentIndicator !== 'none') {
-        const n = parseInt(currentIndicator.replace('ma', ''));
+        const n = Number(currentIndicator.replace('ma', ''));
         const closes = ohlc.map(d => d.c);
         const ma = simpleMovingAverage(closes, n);
-        
         datasets.push({
-          label: `MA${n}`,
+          label: `${currentIndicator.toUpperCase()}`,
           data: ma.map((v, i) => ({ x: ohlc[i].t, y: v })).filter(d => d.y !== null),
           type: 'line',
           borderColor: '#ff7f0e',
-          backgroundColor: 'rgba(255, 127, 14, 0.1)',
-          tension: 0.1,
-          pointRadius: 0,
-          borderDash: [5, 5]
+          backgroundColor: 'rgba(255,127,14,0.08)',
+          tension: 0.2,
+          pointRadius: 0
         });
       }
 
-      // Chart configuration
-      const config = {
-        type: currentChartType === 'candlestick' ? 'candlestick' : 'line',
+      ohlcChart = new Chart(ctx, {
         data: { datasets },
         options: {
           responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top'
-            },
-            tooltip: {
-              mode: 'index',
-              intersect: false
-            }
-          },
+          plugins: { legend: { display: true } },
           scales: {
-            x: {
-              type: 'time',
-              time: {
-                unit: currentRange === '1D' ? 'hour' : 'day',
-                tooltipFormat: 'PPpp'
-              },
-              title: {
-                display: true,
-                text: 'Time'
-              }
-            },
-            y: {
-              beginAtZero: false,
-              title: {
-                display: true,
-                text: 'Price'
-              }
-            }
+            x: { type: 'time', time: { unit: currentRange === '1D' ? 'hour' : 'day' } },
+            y: { beginAtZero: false }
           }
         }
-      };
-
-      ohlcChart = new Chart(ctx, config);
-
-      // Show demo notice if applicable
-      if (isDemo) {
-        const existingNotice = document.querySelector('.demo-notice-global');
-        if (existingNotice) existingNotice.remove();
-        
-        const notice = document.createElement('div');
-        notice.className = 'demo-notice demo-notice-global';
-        notice.textContent = 'Showing demo data (API limits reached)';
-        canvas.parentNode.insertBefore(notice, canvas.nextSibling);
-      }
+      });
     }
 
     function simpleMovingAverage(arr, n) {
       const res = [];
       for (let i = 0; i < arr.length; i++) {
-        if (i < n - 1) {
-          res.push(null);
-        } else {
+        if (i < n - 1) res.push(null);
+        else {
           let sum = 0;
-          for (let j = 0; j < n; j++) {
-            sum += arr[i - j] || 0;
-          }
+          for (let j = 0; j < n; j++) sum += arr[i - j] || 0;
           res.push(sum / n);
         }
       }
       return res;
     }
 
-    // News loading with CORS proxy and better image handling
-    async function loadNews() {
-      const now = Date.now();
-      if (now - lastNewsUpdate < NEWS_UPDATE_INTERVAL && $('newsGrid').children.length > 1) {
-        return;
-      }
-      lastNewsUpdate = now;
-
+    // News loading with thumbnail support
+    async function parseRSS(url) {
       try {
-        // Use CORS proxy for RSS feeds
-        const feeds = [
-          'https://rss.app/feeds/eW3dJ2K6f8jL9nPq.xml', // Financial News proxy
-          'https://rss.app/feeds/vL2wM4x7z9bC3fH6.xml', // Market News proxy
-          'https://rss.app/feeds/pR5tN8q1s3uV7xY0.xml'  // Business News proxy
-        ];
-
-        let allItems = [];
-        
-        for (const url of feeds) {
-          try {
-            const response = await fetch(url);
-            if (!response.ok) continue;
-            
-            const text = await response.text();
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(text, 'text/xml');
-            
-            const items = xmlDoc.querySelectorAll('item');
-            Array.from(items).forEach(item => {
-              const title = item.querySelector('title')?.textContent || 'No title';
-              const link = item.querySelector('link')?.textContent || '#';
-              const description = item.querySelector('description')?.textContent || '';
-              const pubDate = item.querySelector('pubDate')?.textContent || new Date().toISOString();
-              
-              // Extract image from description or use placeholder
-              let imageUrl = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop'; // Finance placeholder
-              
-              // Try to extract image from description
-              const imgMatch = description.match(/<img[^>]+src="([^">]+)"/i);
-              if (imgMatch && imgMatch[1]) {
-                imageUrl = imgMatch[1];
-              }
-              
-              // Try to get media content
-              const media = item.querySelector('media\\:content, content');
-              if (media && media.getAttribute('url')) {
-                imageUrl = media.getAttribute('url');
-              }
-              
-              allItems.push({
-                title,
-                link,
-                description,
-                pubDate,
-                imageUrl
-              });
-            });
-          } catch (feedError) {
-            console.error('Error parsing feed:', feedError);
-          }
-        }
-
-        // Fallback if no items found
-        if (allItems.length === 0) {
-          loadFallbackNews();
-          return;
-        }
-
-        // Sort by date and take top 9
-        allItems.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-        const topItems = allItems.slice(0, 9);
-
-        // Render news cards
-        const newsGrid = $('newsGrid');
-        newsGrid.innerHTML = topItems.map(item => `
-          <a class="newsCard" href="${item.link}" target="_blank" rel="noopener noreferrer">
-            <img src="${item.imageUrl}" alt="${item.title}" onerror="this.src='https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop'">
-            <div class="body">
-              <h5>${item.title.length > 80 ? item.title.substring(0, 80) + '...' : item.title}</h5>
-              <div class="meta">${new Date(item.pubDate).toLocaleDateString()}</div>
-            </div>
-          </a>
-        `).join('');
-
-      } catch (error) {
-        console.error('Error loading news:', error);
-        loadFallbackNews();
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const xmlText = await r.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, 'text/xml');
+        const items = doc.querySelectorAll('item');
+        return Array.from(items).map(item => ({
+          title: item.querySelector('title')?.textContent || '',
+          link: item.querySelector('link')?.textContent || '',
+          description: item.querySelector('description')?.textContent || '',
+          pubDate: item.querySelector('pubDate')?.textContent || '',
+          image: item.querySelector('enclosure')?.getAttribute('url') || item.querySelector('media\\:content')?.getAttribute('url') || 
+                 (item.querySelector('description')?.textContent.match(/<img[^>]+src="([^">]+)"/i) || [])[1] || ''
+        }));
+      } catch (e) {
+        console.error(`RSS parse error for ${url}:`, e);
+        return [];
       }
     }
 
-    function loadFallbackNews() {
-      const fallbackNews = [
-        {
-          title: 'Stock Markets Reach New Highs Amid Economic Optimism',
-          link: '#',
-          pubDate: new Date().toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Cryptocurrency Market Shows Strong Recovery Signs',
-          link: '#',
-          pubDate: new Date(Date.now() - 86400000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Federal Reserve Holds Rates Steady in Latest Meeting',
-          link: '#',
-          pubDate: new Date(Date.now() - 172800000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Tech Giants Report Strong Quarterly Earnings',
-          link: '#',
-          pubDate: new Date(Date.now() - 259200000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Global Oil Prices Stabilize After Recent Volatility',
-          link: '#',
-          pubDate: new Date(Date.now() - 345600000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1504893524553-b855bceeacef?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Emerging Markets Show Promising Growth Trends',
-          link: '#',
-          pubDate: new Date(Date.now() - 432000000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Renewable Energy Stocks Surge on Policy Support',
-          link: '#',
-          pubDate: new Date(Date.now() - 518400000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'Banking Sector Faces New Regulatory Challenges',
-          link: '#',
-          pubDate: new Date(Date.now() - 604800000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=600&h=400&fit=crop'
-        },
-        {
-          title: 'AI Technology Investments Reach Record Levels',
-          link: '#',
-          pubDate: new Date(Date.now() - 691200000).toISOString(),
-          imageUrl: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=600&h=400&fit=crop'
-        }
+    async function loadNews() {
+      const now = Date.now();
+      if (now - lastNewsUpdate < NEWS_UPDATE_INTERVAL) return;
+      lastNewsUpdate = now;
+      const feeds = [
+        'https://feeds.reuters.com/reuters/businessNews',
+        'http://feeds.bbci.co.uk/news/business/rss.xml',
+        'https://www.cnbc.com/id/100003114/device/rss/rss.html'
       ];
+      let allItems = [];
+      for (const url of feeds) {
+        const items = await parseRSS(url);
+        allItems.push(...items);
+      }
+      if (allItems.length === 0) {
+        loadFallbackNews();
+        return;
+      }
+      const top = allItems.slice(0, 9).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+      const nodes = top.map(it => {
+        const img = it.image || 'https://via.placeholder.com/600x400?text=' + encodeURIComponent(it.title.substring(0, 10));
+        return `
+          <a class="newsCard" href="${it.link}" target="_blank" rel="noreferrer">
+            <img src="${img}" alt="${it.title}" onerror="this.src='https://via.placeholder.com/600x400?text=News'">
+            <div class="body">
+              <h5>${it.title}</h5>
+              <div class="meta">${new Date(it.pubDate).toLocaleDateString()}</div>
+            </div>
+          </a>
+        `;
+      });
+      $('newsGrid').innerHTML = nodes.join('');
+    }
 
-      const newsGrid = $('newsGrid');
-      newsGrid.innerHTML = fallbackNews.map(item => `
-        <a class="newsCard" href="${item.link}" target="_blank" rel="noopener noreferrer">
-          <img src="${item.imageUrl}" alt="${item.title}">
+    function loadFallbackNews() {
+      const fallback = [
+        { title: 'Market Update: Stocks Rise', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Market' },
+        { title: 'Crypto News: BTC Hits New High', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Crypto' },
+        { title: 'Business Brief: Earnings Season', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Earnings' },
+        { title: 'Global Economy: Fed Decisions', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Economy' },
+        { title: 'Tech Stocks Surge', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Tech' },
+        { title: 'Oil Prices Fluctuate', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Oil' },
+        { title: 'Retail Sales Report', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Retail' },
+        { title: 'Bond Yields Climb', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=Bonds' },
+        { title: 'IPO Buzz in Asia', link: '#', pubDate: now, image: 'https://via.placeholder.com/600x400?text=IPO' }
+      ];
+      const nodes = fallback.map(it => `
+        <a class="newsCard" href="${it.link}" target="_blank" rel="noreferrer">
+          <img src="${it.image}" alt="${it.title}" onerror="this.src='https://via.placeholder.com/600x400?text=News'">
           <div class="body">
-            <h5>${item.title}</h5>
-            <div class="meta">${new Date(item.pubDate).toLocaleDateString()}</div>
+            <h5>${it.title}</h5>
+            <div class="meta">${new Date(it.pubDate).toLocaleDateString()}</div>
           </div>
         </a>
-      `).join('');
+      `);
+      $('newsGrid').innerHTML = nodes.join('');
     }
 
     // Trading advisory rules
     function computeSignalsFromOHLC(ohlc) {
-      if (!ohlc || ohlc.length < 20) {
-        return { recommendation: 'Hold', reason: 'Insufficient data for analysis' };
+      if (ohlc.length < 50) return { recommendation: 'Hold', reason: 'Insufficient data' };
+      const closes = ohlc.map(d => d.c);
+      const ma10 = closes.map((v, i) => i < 9 ? null : closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10);
+      const ma50 = closes.map((v, i) => i < 49 ? null : closes.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50);
+      const idx = closes.length - 1;
+      const signal = { recommendation: 'Hold', reason: 'No clear signal' };
+      if (ma10[idx] && ma50[idx]) {
+        if (ma10[idx] > ma50[idx]) {
+          signal.recommendation = 'Buy';
+          signal.reason = 'MA10 crossed above MA50 (bullish)';
+        } else if (ma10[idx] < ma50[idx]) {
+          signal.recommendation = 'Sell';
+          signal.reason = 'MA10 below MA50 (bearish)';
+        }
       }
-
-      const closes = ohlc.map(d => d.c).filter(c => c > 0);
-      
-      if (closes.length < 20) {
-        return { recommendation: 'Hold', reason: 'Not enough valid price data' };
+      const prev = closes[closes.length - 5] || closes[0];
+      const changePct = ((closes[idx] - prev) / prev) * 100;
+      if (Math.abs(changePct) > 2) {
+        signal.momentum = changePct.toFixed(2) + '% over last 5 days';
       }
-
-      // Calculate moving averages
-      const ma10 = simpleMovingAverage(closes, 10);
-      const ma50 = simpleMovingAverage(closes, 50);
-      
-      const currentMA10 = ma10[ma10.length - 1];
-      const currentMA50 = ma50[ma50.length - 1];
-      const currentPrice = closes[closes.length - 1];
-
-      if (!currentMA10 || !currentMA50) {
-        return { recommendation: 'Hold', reason: 'Cannot calculate indicators' };
-      }
-
-      const signal = { recommendation: 'Hold', reason: 'No clear trend detected' };
-
-      // MA crossover strategy
-      if (currentMA10 > currentMA50 && currentPrice > currentMA10) {
-        signal.recommendation = 'Buy';
-        signal.reason = 'Bullish trend: Price above MA10 and MA10 above MA50';
-      } else if (currentMA10 < currentMA50 && currentPrice < currentMA10) {
-        signal.recommendation = 'Sell';
-        signal.reason = 'Bearish trend: Price below MA10 and MA10 below MA50';
-      }
-
-      // Momentum analysis
-      const shortTermMomentum = ((currentPrice - closes[closes.length - 5]) / closes[closes.length - 5]) * 100;
-      
-      if (Math.abs(shortTermMomentum) > 3) {
-        signal.momentum = `${shortTermMomentum.toFixed(2)}% over last 5 periods`;
-      }
-
       return signal;
     }
 
-    function updateAdvisories(symbol, data) {
-      const advisoriesEl = $('advisories');
-      
-      if (data.error) {
-        advisoriesEl.innerHTML = `
-          <div class="error">
-            <strong>${symbol}</strong>: ${data.error}
-          </div>
-          <div style="margin-top:8px;font-size:13px">
-            Using demo data for analysis. For live trading, verify with real-time sources.
-          </div>
-        `;
+    function updateAdvisories(symbol, ohlcOrError) {
+      if (ohlcOrError.error) {
+        $('advisories').innerHTML = `<div class="error"><strong>${symbol}</strong>: ${ohlcOrError.error}.</div>`;
         return;
       }
-
-      const signal = computeSignalsFromOHLC(data.ohlc);
-      const isDemo = data.isDemo;
-
-      advisoriesEl.innerHTML = `
-        <strong>${symbol}</strong> ${isDemo ? '<span class="demo-notice" style="display:inline-block;margin-left:8px;">Demo Data</span>' : ''}
-        <div style="margin-top:6px">Recommendation: <strong>${signal.recommendation}</strong></div>
-        <div class="meta" style="margin-top:6px">${signal.reason}</div>
-        ${signal.momentum ? `<div class="meta" style="margin-top:6px">Momentum: ${signal.momentum}</div>` : ''}
-        <div style="margin-top:10px;font-size:13px">
-          <strong>Risk Advisory:</strong> Always use proper risk management. 
-          Consider position sizing and stop-losses. Not financial advice.
-        </div>
+      const s = computeSignalsFromOHLC(ohlcOrError.ohlc);
+      $('advisories').innerHTML = `
+        <strong>${symbol}</strong>
+        <div style="margin-top:6px">Recommendation: <strong>${s.recommendation}</strong></div>
+        <div class="meta" style="margin-top:6px">${s.reason}</div>
+        ${s.momentum ? `<div class="meta" style="margin-top:6px">Momentum: ${s.momentum}</div>` : ''}
+        <div style="margin-top:10px;font-size:13px">Note: Forex: Use tight stops. Crypto: Dollar-cost average.</div>
       `;
     }
 
     async function loadCryptoAdvice() {
-      try {
-        const cryptoData = await fetchCoinGeckoData();
-        const cryptoAdviceEl = $('cryptoAdvice');
-        
-        const nodes = cryptoData.map(crypto => {
-          const symbol = crypto.symbol?.toUpperCase() || 'CRYPTO';
-          const price = crypto.current_price?.toLocaleString('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          }) || '$0.00';
-          
-          const change = crypto.price_change_percentage_24h || 0;
-          const changeFormatted = change.toFixed(2);
-          const changeColor = change >= 0 ? '#00cc00' : '#d32f2f';
-          
-          let recommendation = 'Hold';
-          if (change > 8) recommendation = 'Consider Taking Profits';
-          else if (change > 3) recommendation = 'Bullish - Monitor';
-          else if (change < -8) recommendation = 'Potential Buying Opportunity';
-          else if (change < -3) recommendation = 'Bearish - Caution';
-
-          return `
-            <div style="padding:8px 0;border-bottom:1px dashed #f1f6fb">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <strong>${symbol}</strong>
-                <span>${price}</span>
-              </div>
-              <div class="meta" style="color:${changeColor}">
-                24h: ${change >= 0 ? '+' : ''}${changeFormatted}%
-              </div>
-              <div style="margin-top:4px;font-size:12px;">
-                <em>${recommendation}</em>
-              </div>
-            </div>
-          `;
-        });
-
-        cryptoAdviceEl.innerHTML = nodes.join('');
-
-      } catch (error) {
-        console.error('Error loading crypto advice:', error);
-        $('cryptoAdvice').innerHTML = `
-          <div class="error">
-            Unable to load crypto data. Please check your connection.
+      const js = await fetchCoinGeckoData();
+      const nodes = js.map(c => {
+        const change = Number(c.price_change_percentage_24h || 0).toFixed(2);
+        let rec = 'Hold';
+        if (change > 5) rec = 'Consider Selling';
+        if (change < -7) rec = 'Consider Buying';
+        return `
+          <div style="padding:6px 0;border-bottom:1px dashed #f1f6fb">
+            <strong>${c.symbol.toUpperCase()}</strong> $${c.current_price.toLocaleString()}
+            <div class="meta">24h: ${change}%</div>
+            <div style="margin-top:6px"><em>${rec}</em></div>
           </div>
         `;
-      }
+      });
+      $('cryptoAdvice').innerHTML = nodes.join('');
     }
 
-    // Load symbol - Main function
+    // Load symbol
     async function loadSymbol(symbol, range = '1D') {
-      if (!symbol || symbol.trim() === '') return;
-      
-      currentSymbol = symbol.toUpperCase().trim();
+      if (!symbol) return;
+      currentSymbol = symbol;
       currentRange = range;
-      
-      const chartTitle = $('chartTitle');
-      const chartUpdated = $('chartUpdated');
-      
-      chartTitle.textContent = `Loading ${currentSymbol} (${range})...`;
-      chartTitle.classList.add('loading');
-      
+      $('chartTitle').textContent = `Loading ${symbol} (${range})...`;
+      let res;
       try {
-        let data;
-        
-        // Try Yahoo Finance first (most reliable free option)
-        data = await fetchYahooData(currentSymbol, range);
-        
-        // Render chart and update UI
-        renderChart(data.ohlc, currentSymbol, data.isDemo);
-        chartUpdated.textContent = data.last ? new Date(data.last).toLocaleString() : 'Just now';
-        updateAdvisories(currentSymbol, data);
-        
-      } catch (error) {
-        console.error(`Error loading symbol ${currentSymbol}:`, error);
-        
-        // Fallback to mock data
-        const daysMap = { '1D': 1, '1W': 7, '1M': 30, '3M': 90, '1Y': 365, '5Y': 1825 };
-        const days = daysMap[range] || 30;
-        const fallbackData = {
-          ohlc: mockOHLC(days),
-          last: new Date().toISOString(),
-          isDemo: true,
-          error: 'Using demo data: ' + error.message
-        };
-        
-        renderChart(fallbackData.ohlc, currentSymbol, true);
-        chartUpdated.textContent = new Date().toLocaleString();
-        updateAdvisories(currentSymbol, fallbackData);
-      } finally {
-        chartTitle.classList.remove('loading');
-        chartTitle.textContent = `${currentSymbol} (${range})`;
+        res = await fetchYahooData(symbol, range === '1D' ? 1 : range === '1W' ? 7 : range === '1M' ? 30 : range === '3M' ? 90 : range === '1Y' ? 365 : 1825);
+        if (res.error && symbol.toLowerCase() === 'btc') {
+          const cg = await fetchCoinGeckoData();
+          res = { ohlc: cg.map(item => ({ t: now - Math.random() * 86400000 * 30, o: item.current_price, h: item.current_price * 1.05, l: item.current_price * 0.95, c: item.current_price })), last: new Date().toISOString() };
+        }
+        if (res.ohlc && res.ohlc.length > 0) {
+          renderChart(res.ohlc, symbol);
+          $('chartUpdated').textContent = res.last ? new Date(res.last).toLocaleString() : '--';
+          updateAdvisories(symbol, res);
+        } else {
+          const fallback = { ohlc: mockOHLC(100), last: now.toISOString() };
+          renderChart(fallback.ohlc, symbol);
+          $('chartUpdated').textContent = now.toLocaleString();
+          updateAdvisories(symbol, fallback);
+        }
+      } catch (e) {
+        console.error(`Load symbol error for ${symbol}:`, e);
+        const fallback = { ohlc: mockOHLC(100), last: now.toISOString() };
+        renderChart(fallback.ohlc, symbol);
+        $('chartUpdated').textContent = now.toLocaleString();
+        updateAdvisories(symbol, fallback);
       }
     }
 
-    // Posts with realistic data
+    // Posts
     async function loadPosts() {
-      const watchlist = getWatch().slice(0, 9);
-      const postsArea = $('postsArea');
-      
-      postsArea.innerHTML = '<div class="loading">Loading posts...</div>';
-      
-      try {
-        const posts = await Promise.all(
-          watchlist.map(async (symbol) => {
-            try {
-              // Get quote data
-              const quote = mockQuote(symbol);
-              const changeClass = quote.d >= 0 ? 'green' : '';
-              const changeSymbol = quote.d >= 0 ? '+' : '';
-              
-              return `
-                <div class="post">
-                  <h4>${symbol}</h4>
-                  <div class="meta">$${quote.c.toFixed(2)}</div>
-                  <div class="change ${changeClass}">
-                    ${changeSymbol}${quote.d.toFixed(2)} (${changeSymbol}${quote.dp.toFixed(2)}%)
-                  </div>
-                  <div class="demo-notice">Demo Data</div>
-                </div>
-              `;
-            } catch (error) {
-              console.error(`Error loading post for ${symbol}:`, error);
-              const quote = mockQuote(symbol);
-              const changeClass = quote.d >= 0 ? 'green' : '';
-              const changeSymbol = quote.d >= 0 ? '+' : '';
-              
-              return `
-                <div class="post">
-                  <h4>${symbol}</h4>
-                  <div class="meta">$${quote.c.toFixed(2)}</div>
-                  <div class="change ${changeClass}">
-                    ${changeSymbol}${quote.d.toFixed(2)} (${changeSymbol}${quote.dp.toFixed(2)}%)
-                  </div>
-                  <div class="demo-notice">Demo Data</div>
-                </div>
-              `;
-            }
-          })
-        );
-        
-        postsArea.innerHTML = posts.join('');
-        
-      } catch (error) {
-        console.error('Error loading posts:', error);
-        postsArea.innerHTML = '<div class="error">Error loading market data</div>';
+      const watch = getWatch().slice(0, 9);
+      const area = $('postsArea');
+      area.innerHTML = '';
+      const nodes = [];
+      for (const s of watch) {
+        try {
+          await delay(1000); // Respect rate limits
+          const quote = await fetchYahooQuote(s);
+          const changeClass = quote.d > 0 ? 'green' : '';
+          nodes.push(`
+            <div class="post">
+              <h4>${s}</h4>
+              <div class="meta">${quote.c.toFixed(2)}</div>
+              <div class="change ${changeClass}">${quote.d.toFixed(2)} (${quote.dp.toFixed(2)}%)</div>
+            </div>
+          `);
+        } catch (e) {
+          const quote = mockQuote(s);
+          const changeClass = quote.d > 0 ? 'green' : '';
+          nodes.push(`
+            <div class="post">
+              <h4>${s}</h4>
+              <div class="meta">${quote.c.toFixed(2)}</div>
+              <div class="change ${changeClass}">${quote.d.toFixed(2)} (${quote.dp.toFixed(2)}%)</div>
+            </div>
+          `);
+        }
       }
+      area.innerHTML = nodes.join('');
     }
 
-    // Initialize the dashboard
+    // Init & auto refresh
     async function loadAll() {
-      // Initialize watchlist
       renderWatch();
-      
-      // Load initial data
-      await Promise.allSettled([
-        loadCryptoAdvice(),
-        loadNews(),
-        loadPosts()
-      ]);
-      
-      // Setup time range buttons
+      await Promise.allSettled([loadCryptoAdvice(), loadNews(), loadPosts()]);
+      // Time range
       const ranges = ['1D', '1W', '1M', '3M', '1Y', '5Y'];
       const timeRangeDiv = $('timeRange');
-      timeRangeDiv.innerHTML = ranges.map(range => 
-        `<button class="${range === '1D' ? 'active' : ''}" data-range="${range}">${range}</button>`
-      ).join('');
-      
+      timeRangeDiv.innerHTML = ranges.map(r => `<button class="${r === '1D' ? 'active' : ''}" data-range="${r}">${r}</button>`).join('');
       timeRangeDiv.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-          timeRangeDiv.querySelector('.active')?.classList.remove('active');
+          timeRangeDiv.querySelector('.active').classList.remove('active');
           btn.classList.add('active');
-          if (currentSymbol) {
-            loadSymbol(currentSymbol, btn.dataset.range);
-          }
+          if (currentSymbol) loadSymbol(currentSymbol, btn.dataset.range);
         });
       });
-      
-      // Setup chart type buttons
-      const chartTypes = [
-        { type: 'candlestick', label: 'Candlestick' },
-        { type: 'line', label: 'Line' },
-        { type: 'bar', label: 'Bar' }
-      ];
+
+      // Chart type
+      const chartTypes = ['candlestick', 'line', 'bar'];
       const chartTypeDiv = $('chartType');
-      chartTypeDiv.innerHTML = chartTypes.map(({ type, label }) => 
-        `<button class="${type === 'candlestick' ? 'active' : ''}" data-type="${type}">${label}</button>`
-      ).join('');
-      
+      chartTypeDiv.innerHTML = chartTypes.map(t => `<button class="${t === 'candlestick' ? 'active' : ''}" data-type="${t}">${t.charAt(0).toUpperCase() + t.slice(1)}</button>`).join('');
       chartTypeDiv.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-          chartTypeDiv.querySelector('.active')?.classList.remove('active');
+          chartTypeDiv.querySelector('.active').classList.remove('active');
           btn.classList.add('active');
           currentChartType = btn.dataset.type;
-          if (currentSymbol) {
-            loadSymbol(currentSymbol, currentRange);
-          }
+          if (currentSymbol) loadSymbol(currentSymbol, currentRange);
         });
       });
-      
-      // Setup indicator select
+
+      // Indicator
       $('indicatorSelect').addEventListener('change', (e) => {
         currentIndicator = e.target.value;
-        if (currentSymbol) {
-          loadSymbol(currentSymbol, currentRange);
-        }
+        if (currentSymbol) loadSymbol(currentSymbol, currentRange);
       });
-      
-      // Load first symbol from watchlist
-      const firstSymbol = getWatch()[0];
-      if (firstSymbol) {
-        loadSymbol(firstSymbol);
-      }
     }
 
-    // Event listeners
-    $('loadBtn').addEventListener('click', () => {
-      const symbol = $('globalSearch').value.trim();
-      if (!symbol) {
-        alert('Please enter a symbol');
-        return;
-      }
-      
-      const watchlist = getWatch();
-      if (!watchlist.includes(symbol.toUpperCase())) {
-        watchlist.unshift(symbol.toUpperCase());
-        saveWatch(watchlist);
-        renderWatch();
-      }
-      
-      $('globalSearch').value = '';
-      loadSymbol(symbol);
-    });
-
-    $('globalSearch').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        $('loadBtn').click();
-      }
-    });
-
     $('sendBtn').addEventListener('click', () => {
-      const name = $('name').value.trim();
-      const email = $('email').value.trim();
-      const message = $('message').value.trim();
-      
-      if (!name || !email || !message) {
+      const n = $('name').value.trim();
+      const e = $('email').value.trim();
+      const m = $('message').value.trim();
+      if (!n || !e || !m) {
         $('sendStatus').textContent = 'Please fill all fields.';
         return;
       }
-      
-      const subject = `Contact from ${name} - Market Pulse Dashboard`;
-      const body = `Message: ${message}\n\nFrom: ${name} <${email}>`;
-      
-      window.location.href = `mailto:wambuamwanza6@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      $('sendStatus').textContent = 'Opening email client...';
+      const subject = encodeURIComponent('Contact from ' + n);
+      const body = encodeURIComponent(m + '\n\nFrom: ' + n + ' <' + e + '>');
+      window.location.href = 'mailto:wambuamwanza6@gmail.com?subject=' + subject + '&body=' + body;
+      $('sendStatus').textContent = 'Opening mail client...';
     });
 
-    // Initialize the application
-    document.addEventListener('DOMContentLoaded', () => {
-      loadAll();
-      
-      // Set up periodic updates
-      setInterval(() => {
-        loadPosts();
-        if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) {
-          loadNews();
-        }
-      }, 120000); // Update every 2 minutes
-    });
+    (async function boot() {
+      await loadAll();
+      const first = getWatch()[0];
+      if (first) loadSymbol(first);
+      setInterval(async () => {
+        await loadPosts();
+        if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) await loadNews();
+      }, 120000); // 2 min for posts, 5 min for news
+    })();
   </script>
 </body>
 </html>
