@@ -432,102 +432,97 @@
     };
   }
 
-  function handleLiveTick(price, ts) {
-    // bucket by second
-    const sec = Math.floor(ts/1000)*1000;
-    if (!currentBucket || currentBucket.t !== sec) {
-      // new second bucket
-      currentBucket = { t: sec, o: price, h: price, l: price, c: price };
-      // append new candle (or new line point)
-      if (currentChartType === 'candlestick') {
-        // find candlestick dataset
-        const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
-        if (ds) {
-          ds.data.push({ x: currentBucket.t, o: currentBucket.o, h: currentBucket.h, l: currentBucket.l, c: currentBucket.c });
-          // bound length
-          if (ds.data.length > MAX_POINTS) ds.data.shift();
-        } else {
-          // no candlestick dataset (maybe line view) -> push into dataset[0] as point
-          const d0 = ohlcChart.data.datasets[0];
-          d0.data.push({ x: ts, y: price });
-          if (d0.data.length > MAX_POINTS) d0.data.shift();
-        }
+function handleLiveTick(price, ts) {
+  const MAX_POINTS = 200; // number of candles or line points to keep visible
+  const LIVE_LINE_MAX = 200; // max live overlay points
+
+  // bucket by second
+  const sec = Math.floor(ts / 1000) * 1000;
+  if (!currentBucket || currentBucket.t !== sec) {
+    // new second bucket
+    currentBucket = { t: sec, o: price, h: price, l: price, c: price };
+
+    if (currentChartType === 'candlestick') {
+      // find candlestick dataset
+      const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+      if (ds) {
+        ds.data.push({ x: currentBucket.t, o: currentBucket.o, h: currentBucket.h, l: currentBucket.l, c: currentBucket.c });
+        if (ds.data.length > MAX_POINTS) ds.data.splice(0, ds.data.length - MAX_POINTS);
       } else {
-        // line mode -> push point
-        const d0 = ohlcChart.data.datasets[0] || (ohlcChart.data.datasets[0] = { label: currentSymbol, data: [] });
-        d0.data.push({ x: ts, y: price });
-        if (d0.data.length > MAX_POINTS) d0.data.shift();
-      }
-    } else {
-      // same second -> update bucket high/low/close
-      currentBucket.h = Math.max(currentBucket.h, price);
-      currentBucket.l = Math.min(currentBucket.l, price);
-      currentBucket.c = price;
-      if (currentChartType === 'candlestick') {
-        const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
-        if (ds && ds.data.length) {
-          const last = ds.data[ds.data.length - 1];
-          last.h = Math.max(last.h, price);
-          last.l = Math.min(last.l, price);
-          last.c = price;
-        }
-      } else {
+        // fallback: line dataset
         const d0 = ohlcChart.data.datasets[0];
-        if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = price;
+        d0.data.push({ x: ts, y: price });
+        if (d0.data.length > MAX_POINTS) d0.data.splice(0, d0.data.length - MAX_POINTS);
       }
-    }
-
-    // maintain live line overlay buffer
-    liveLineBuffer.push({ x: ts, y: price });
-    if (liveLineBuffer.length > LIVE_LINE_MAX) liveLineBuffer.shift();
-
-    // find or create LIVE dataset and update it
-    const liveLabel = `LIVE: ${currentSymbol}`;
-    let liveIdx = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
-    const livePoints = liveLineBuffer.slice(-LIVE_LINE_MAX);
-    if (liveIdx === -1) {
-      ohlcChart.data.datasets.push({
-        label: liveLabel,
-        data: livePoints,
-        type: 'line',
-        borderColor: document.documentElement.classList.contains('light') ? '#ff4d4d' : '#ff7f7f',
-        backgroundColor: 'rgba(255,77,77,0.06)',
-        pointRadius: 0,
-        borderWidth: 1.2,
-        tension: 0.15,
-        yAxisID: 'y'
-      });
     } else {
-      ohlcChart.data.datasets[liveIdx].data = livePoints;
+      // line mode
+      const d0 = ohlcChart.data.datasets[0] || (ohlcChart.data.datasets[0] = { label: currentSymbol, data: [] });
+      d0.data.push({ x: ts, y: price });
+      if (d0.data.length > MAX_POINTS) d0.data.splice(0, d0.data.length - MAX_POINTS);
     }
-
-    // keep candle dataset length bounded (find candlestick ds and trim)
-    const cndIdx = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
-    if (cndIdx !== -1) {
-      const ds = ohlcChart.data.datasets[cndIdx];
-      if (ds.data.length > MAX_POINTS) ds.data.splice(0, ds.data.length - MAX_POINTS);
-    } else {
-      // trim line dataset
-      if (ohlcChart.data.datasets[0] && ohlcChart.data.datasets[0].data.length > MAX_POINTS) {
-        ohlcChart.data.datasets[0].data.splice(0, ohlcChart.data.datasets[0].data.length - MAX_POINTS);
+  } else {
+    // same-second update
+    currentBucket.h = Math.max(currentBucket.h, price);
+    currentBucket.l = Math.min(currentBucket.l, price);
+    currentBucket.c = price;
+    if (currentChartType === 'candlestick') {
+      const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+      if (ds && ds.data.length) {
+        const last = ds.data[ds.data.length - 1];
+        last.h = Math.max(last.h, price);
+        last.l = Math.min(last.l, price);
+        last.c = price;
       }
+    } else {
+      const d0 = ohlcChart.data.datasets[0];
+      if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = price;
     }
-
-    // throttle indicator recalcs slightly to avoid heavy CPU (set 400ms)
-    scheduleIndicatorRecalc();
-
-    // update chart quickly without animation
-    try { ohlcChart.update('none'); } catch (e) { try { ohlcChart.update(); } catch(e){} }
   }
 
-  let _indicatorTimer = null;
-  function scheduleIndicatorRecalc() {
-    if (_indicatorTimer) return;
-    _indicatorTimer = setTimeout(() => {
-      _indicatorTimer = null;
-      recalcIndicators();
-    }, 400);
+  // maintain live line overlay buffer (trim properly)
+  liveLineBuffer.push({ x: ts, y: price });
+  if (liveLineBuffer.length > LIVE_LINE_MAX) {
+    liveLineBuffer.splice(0, liveLineBuffer.length - LIVE_LINE_MAX);
   }
+
+  // find or create LIVE dataset and update it
+  const liveLabel = `LIVE: ${currentSymbol}`;
+  let liveIdx = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
+  const livePoints = liveLineBuffer.slice(-LIVE_LINE_MAX);
+  if (liveIdx === -1) {
+    ohlcChart.data.datasets.push({
+      label: liveLabel,
+      data: livePoints,
+      type: 'line',
+      borderColor: document.documentElement.classList.contains('light') ? '#ff4d4d' : '#ff7f7f',
+      backgroundColor: 'rgba(255,77,77,0.06)',
+      pointRadius: 0,
+      borderWidth: 1.2,
+      tension: 0.15,
+      yAxisID: 'y'
+    });
+  } else {
+    ohlcChart.data.datasets[liveIdx].data = livePoints;
+  }
+
+  // 🔥 keep ALL datasets bounded to prevent overflow
+  ohlcChart.data.datasets.forEach(ds => {
+    if (Array.isArray(ds.data) && ds.data.length > MAX_POINTS) {
+      ds.data.splice(0, ds.data.length - MAX_POINTS);
+    }
+  });
+
+  // throttle indicator recalcs slightly to avoid heavy CPU
+  scheduleIndicatorRecalc();
+
+  // fast chart update (no animation)
+  try {
+    ohlcChart.update('none');
+  } catch (e) {
+    try { ohlcChart.update(); } catch (e2) {}
+  }
+}
+
 
   function recalcIndicators() {
     try {
