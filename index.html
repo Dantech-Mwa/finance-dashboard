@@ -48,7 +48,7 @@
     .card-border { border: 1px solid #e6eef6; }
     .zoom-slider { width: 180px; }
     .ws-status { font-size: 0.75rem; color: #6b7b8c; }
-    .ws-status.connected { color: #00cc00; }
+    .ws-status.connected { color: #008800; }
     .ws-status.disconnected { color: #d32f2f; }
   </style>
 </head>
@@ -89,7 +89,7 @@
           <div class="chartToolbar flex items-center gap-3 flex-wrap">
             <div><strong id="chartTitle">Select a symbol</strong></div>
             <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
-            <div class="ws-status" id="wsStatus">WebSocket: Connecting...</div>
+            <div class="ws-status" id="wsStatus">WebSocket: Disconnected</div>
             <div id="timeRange" class="flex gap-2"></div>
             <div id="chartType" class="flex gap-2"></div>
             <select id="indicatorSelect" class="indicatorSelect ml-2 px-3 py-1 border rounded-lg card-border text-sm">
@@ -149,9 +149,14 @@
     let binanceWS = null;
     let currentBucket = null;
     let liveLineBuffer = [];
+    let tradeBuffer = [];
+    let lastUpdate = 0;
     const MAX_POINTS = 60; // 60 seconds of data
     const LIVE_LINE_MAX = 300; // 5 minutes for live line overlay
+    const UPDATE_INTERVAL = 200; // Batch updates every 200ms
     let useFallbackData = false;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
 
     const $ = id => document.getElementById(id);
     const dataCache = new Map();
@@ -188,11 +193,12 @@
       try {
         binanceWS = new WebSocket(url);
         updateWebSocketStatus('Connecting...');
+        reconnectAttempts = 0;
       } catch (e) {
         console.error('WS connect error', e);
         updateWebSocketStatus('disconnected', 'Connection failed');
         useFallbackData = true;
-        startFallbackData(symbol);
+        startFallbackData(symbol.replace('USDT', ''));
         return;
       }
 
@@ -201,6 +207,7 @@
         updateWebSocketStatus('connected');
         useFallbackData = false;
         stopFallbackData();
+        reconnectAttempts = 0;
       };
 
       binanceWS.onmessage = (evt) => {
@@ -208,37 +215,60 @@
           const msg = JSON.parse(evt.data);
           const price = parseFloat(msg.p);
           const ts = msg.T || Date.now();
-          handleLiveTick(price, ts);
+          tradeBuffer.push({ price, ts });
+          processTradeBuffer();
         } catch (e) {
           console.error('WS message error', e);
+          updateWebSocketStatus('connected', 'Message parse error');
         }
       };
 
       binanceWS.onerror = (err) => {
         console.error('Binance WS error', err);
         updateWebSocketStatus('disconnected', 'Connection error');
+        useFallbackData = true;
+        startFallbackData(symbol.replace('USDT', ''));
       };
 
       binanceWS.onclose = () => {
         console.warn('Binance WS closed; reconnecting in 2s');
         updateWebSocketStatus('disconnected', 'Reconnecting...');
-        setTimeout(() => connectBinance(symbol), 2000);
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          setTimeout(() => connectBinance(symbol), 2000);
+        } else {
+          console.error('Max reconnect attempts reached. Using fallback data.');
+          updateWebSocketStatus('disconnected', 'Max retries reached');
+          useFallbackData = true;
+          startFallbackData(symbol.replace('USDT', ''));
+        }
       };
     }
 
-    function handleLiveTick(price, ts) {
-      if (!ohlcChart || !currentSymbol) return;
-      const sec = Math.floor(ts / 1000) * 1000;
+    function processTradeBuffer() {
+      if (Date.now() - lastUpdate < UPDATE_INTERVAL) return;
+      lastUpdate = Date.now();
+      if (!tradeBuffer.length || !ohlcChart || !currentSymbol) return;
+
+      const now = Date.now();
+      const sec = Math.floor(now / 1000) * 1000;
+      const prices = tradeBuffer.map(t => t.price);
+      const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+      const maxPrice = Math.max(...prices);
+      const minPrice = Math.min(...prices);
+      tradeBuffer = [];
+
       if (!currentBucket || currentBucket.t !== sec) {
-        currentBucket = { t: sec, o: price, h: price, l: price, c: price };
+        const lastClose = currentBucket ? currentBucket.c : avgPrice;
+        currentBucket = { t: sec, o: lastClose, h: maxPrice, l: minPrice, c: avgPrice };
         if (currentChartType === 'candlestick') {
           const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
           if (ds) {
-            ds.data.push({ x: currentBucket.t, o: currentBucket.o, h: currentBucket.h, l: currentBucket.l, c: currentBucket.c });
+            ds.data.push({ x: sec, o: currentBucket.o, h: currentBucket.h, l: currentBucket.l, c: currentBucket.c });
             if (ds.data.length > MAX_POINTS) ds.data.shift();
           } else {
             const d0 = ohlcChart.data.datasets[0];
-            d0.data.push({ x: ts, y: price });
+            d0.data.push({ x: sec, y: avgPrice });
             if (d0.data.length > MAX_POINTS) d0.data.shift();
           }
         } else {
@@ -253,28 +283,28 @@
             pointRadius: 0, 
             borderWidth: 2 
           });
-          d0.data.push({ x: ts, y: price });
+          d0.data.push({ x: sec, y: avgPrice });
           if (d0.data.length > MAX_POINTS) d0.data.shift();
         }
       } else {
-        currentBucket.h = Math.max(currentBucket.h, price);
-        currentBucket.l = Math.min(currentBucket.l, price);
-        currentBucket.c = price;
+        currentBucket.h = Math.max(currentBucket.h, maxPrice);
+        currentBucket.l = Math.min(currentBucket.l, minPrice);
+        currentBucket.c = avgPrice;
         if (currentChartType === 'candlestick') {
           const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
           if (ds && ds.data.length) {
             const last = ds.data[ds.data.length - 1];
-            last.h = Math.max(last.h, price);
-            last.l = Math.min(last.l, price);
-            last.c = price;
+            last.h = Math.max(last.h, maxPrice);
+            last.l = Math.min(last.l, minPrice);
+            last.c = avgPrice;
           }
         } else {
           const d0 = ohlcChart.data.datasets[0];
-          if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = price;
+          if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = avgPrice;
         }
       }
 
-      liveLineBuffer.push({ x: ts, y: price });
+      liveLineBuffer.push({ x: sec, y: avgPrice });
       if (liveLineBuffer.length > LIVE_LINE_MAX) liveLineBuffer.shift();
 
       const liveLabel = `LIVE: ${currentSymbol}`;
@@ -285,11 +315,11 @@
           label: liveLabel,
           data: livePoints,
           type: 'line',
-          borderColor: '#ff4d4d',
-          backgroundColor: 'rgba(255,77,77,0.06)',
+          borderColor: 'rgba(255,77,77,0.8)',
+          backgroundColor: 'rgba(255,77,77,0.05)',
           pointRadius: 0,
-          borderWidth: 1.2,
-          tension: 0.15,
+          borderWidth: 1.0,
+          tension: 0.2,
           yAxisID: 'y'
         });
       } else {
@@ -297,23 +327,26 @@
       }
 
       const cndIdx = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
-      if (cndIdx !== -1) {
-        const ds = ohlcChart.data.datasets[cndIdx];
-        if (ds.data.length > MAX_POINTS) ds.data.splice(0, ds.data.length - MAX_POINTS);
-      } else {
-        if (ohlcChart.data.datasets[0] && ohlcChart.data.datasets[0].data.length > MAX_POINTS) {
-          ohlcChart.data.datasets[0].data.splice(0, ohlcChart.data.datasets[0].data.length - MAX_POINTS);
-        }
-      }
+      let mainData = cndIdx !== -1 ? ohlcChart.data.datasets[cndIdx].data : ohlcChart.data.datasets[0]?.data || [];
+      if (mainData.length > MAX_POINTS) mainData.splice(0, mainData.length - MAX_POINTS);
 
-      // Update x-axis to keep last 60 seconds
-      if (livePoints.length > 0) {
-        ohlcChart.options.scales.x.min = livePoints[0].x;
-        ohlcChart.options.scales.x.max = livePoints[livePoints.length - 1].x;
+      if (mainData.length > 0) {
+        ohlcChart.options.scales.x.min = mainData[mainData.length - MAX_POINTS]?.x || mainData[0].x;
+        ohlcChart.options.scales.x.max = mainData[mainData.length - 1].x;
+        const prices = mainData.map(d => d.c || d.y);
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        const range = maxPrice - minPrice;
+        ohlcChart.options.scales.y.min = minPrice - range * 0.05;
+        ohlcChart.options.scales.y.max = maxPrice + range * 0.05;
       }
 
       scheduleIndicatorRecalc();
-      try { ohlcChart.update('none'); } catch (e) { try { ohlcChart.update(); } catch(e) {} }
+      requestAnimationFrame(() => {
+        try { ohlcChart.update('none'); } catch (e) { try { ohlcChart.update(); } catch(e) {} }
+      });
+      $('chartTitle').textContent = `${currentSymbol} (${currentRange}) - Last: $${avgPrice.toFixed(currentSymbol === 'BTC' || currentSymbol === 'ETH' ? 2 : 4)}`;
+      $('chartUpdated').textContent = new Date(sec).toLocaleTimeString();
     }
 
     let _indicatorTimer = null;
@@ -352,34 +385,31 @@
           ohlcChart.data.datasets[maIdx].data = maData;
         }
       }
-      try { ohlcChart.update('none'); } catch (e) {}
+      requestAnimationFrame(() => {
+        try { ohlcChart.update('none'); } catch (e) {}
+      });
     }
 
-    // Fallback data simulation
+    // Fallback data simulation for crypto and stocks
     function generateFallbackPrice(symbol, lastPrice) {
       const basePrices = {
-        'BTC': 51000,
-        'ETH': 2900,
-        'BNB': 350,
-        'ADA': 0.52,
-        'SOL': 105,
-        'DOT': 7.2,
-        'DOGE': 0.12,
-        'XRP': 0.58,
-        'LTC': 72,
-        'LINK': 15.8
+        'BTC': 51000, 'ETH': 2900, 'BNB': 350, 'ADA': 0.52, 'SOL': 105, 'DOT': 7.2, 'DOGE': 0.12, 'XRP': 0.58, 'LTC': 72, 'LINK': 15.8,
+        'AAPL': 180, 'MSFT': 330, 'GOOGL': 140, 'TSLA': 200, 'AMZN': 170, 'NVDA': 450, 'META': 320
       };
       const basePrice = lastPrice || basePrices[symbol.toUpperCase()] || 100;
-      const change = (Math.random() - 0.5) * basePrice * 0.005;
+      const change = (Math.random() - 0.5) * basePrice * 0.003; // Reduced for realism
       return basePrice + change;
     }
 
     let fallbackInterval = null;
     function startFallbackData(symbol) {
       if (fallbackInterval) clearInterval(fallbackInterval);
+      useFallbackData = true;
       fallbackInterval = setInterval(() => {
         const lastPrice = liveLineBuffer.length > 0 ? liveLineBuffer[liveLineBuffer.length - 1].y : null;
-        handleLiveTick(generateFallbackPrice(symbol, lastPrice), Date.now());
+        const price = generateFallbackPrice(symbol, lastPrice);
+        tradeBuffer.push({ price, ts: Date.now() });
+        processTradeBuffer();
       }, 1000);
       $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live updates paused. Using simulated data. Please refresh or try a different network.</div>';
     }
@@ -389,6 +419,17 @@
         clearInterval(fallbackInterval);
         fallbackInterval = null;
       }
+      useFallbackData = false;
+    }
+
+    function preFillChart(lastPrice) {
+      const now = Date.now();
+      const data = [];
+      for (let i = MAX_POINTS - 1; i >= 0; i--) {
+        const ts = Math.floor((now - i * 1000) / 1000) * 1000;
+        data.push({ x: ts, o: lastPrice, h: lastPrice, l: lastPrice, c: lastPrice });
+      }
+      return data;
     }
 
     function renderWatch() {
@@ -494,12 +535,12 @@
         const price = crypto.current_price?.toLocaleString('en-US', { style:'currency', currency:'USD', minimumFractionDigits: crypto.current_price < 1 ? 4 : 2, maximumFractionDigits: crypto.current_price < 1 ? 4 : 2 }) || '$0.00';
         const change = crypto.price_change_percentage_24h || 0;
         const changeFormatted = Math.abs(change).toFixed(2);
-        const changeColor = change >= 0 ? '#00cc00' : '#d32f2f';
+        const changeColor = change >= 0 ? '#008800' : '#d32f2f';
         const changeSymbol = change >= 0 ? '+' : '';
         let recommendation = 'Hold', recommendationColor = '#6b7b8c';
         if (change > 8) { recommendation = 'Consider Taking Profits'; recommendationColor = '#d32f2f'; }
-        else if (change > 3) { recommendation = 'Bullish - Monitor'; recommendationColor = '#00cc00'; }
-        else if (change < -8) { recommendation = 'Potential Buying Opportunity'; recommendationColor = '#00cc00'; }
+        else if (change > 3) { recommendation = 'Bullish - Monitor'; recommendationColor = '#008800'; }
+        else if (change < -8) { recommendation = 'Potential Buying Opportunity'; recommendationColor = '#008800'; }
         else if (change < -3) { recommendation = 'Bearish - Caution'; recommendationColor = '#d32f2f'; }
         return `
           <div class="py-2 border-b border-slate-100">
@@ -605,7 +646,7 @@
       return res;
     }
 
-    function renderChart(ohlc, label) {
+    function renderChart(ohlc, label, isCrypto) {
       const canvas = $('ohlcChart');
       const ctx = canvas.getContext('2d');
       if (ohlcChart) {
@@ -613,21 +654,33 @@
       }
       if (!ohlc || ohlc.length === 0) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.font = '16px Arial';
+        ctx.font = '16px Inter';
         ctx.fillStyle = '#666';
         ctx.textAlign = 'center';
         ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
         return;
       }
 
-      const ohlcData = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
+      let ohlcData = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
+      if (isCrypto) {
+        const lastPrice = ohlcData[ohlcData.length - 1]?.c || generateFallbackPrice(label, null);
+        ohlcData = preFillChart(lastPrice);
+      } else {
+        ohlcData = ohlcData.slice(-MAX_POINTS);
+      }
+
+      const prices = ohlcData.map(d => d.c || d.y);
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const range = maxPrice - minPrice;
+
       const datasets = [];
       if (currentChartType === 'candlestick') {
         datasets.push({
           label: label,
           data: ohlcData,
           type: 'candlestick',
-          color: { up: '#00cc00', down: '#ff3333', unchanged: '#999999' }
+          color: { up: '#008800', down: '#cc0000', unchanged: '#999999' }
         });
       } else {
         datasets.push({
@@ -671,7 +724,7 @@
               time: { unit: currentRange === '1D' ? 'second' : 'day', displayFormats: { second: 'HH:mm:ss', day: 'MMM dd' } }, 
               grid: { color: 'rgba(0,0,0,0.04)' }, 
               ticks: { maxTicksLimit: 8, font: { size: 10, family: 'Inter' } },
-              min: ohlcData.length > MAX_POINTS ? ohlcData[ohlcData.length - MAX_POINTS].x : ohlcData[0].x,
+              min: ohlcData[0].x,
               max: ohlcData[ohlcData.length - 1].x
             },
             y: { 
@@ -680,7 +733,9 @@
               ticks: { 
                 callback: function(value) { return '$' + value.toFixed(2); }, 
                 font: { size: 10, family: 'Inter' } 
-              } 
+              },
+              min: minPrice - range * 0.05,
+              max: maxPrice + range * 0.05
             }
           }
         }
@@ -697,11 +752,11 @@
       const ma10 = simpleMovingAverage(closes, 10);
       const ma50 = simpleMovingAverage(closes, 50);
       const currentMA10 = ma10[ma10.length - 1];
-      const currentMA50 = ma50[ma50.length - 1];
+      const ma50Last = ma50[ma50.length - 1];
       const currentPrice = closes[closes.length - 1];
       const signal = { recommendation: 'Hold', reason: 'No clear trend detected' };
-      if (currentMA10 > currentMA50 && currentPrice > currentMA10) { signal.recommendation = 'Buy'; signal.reason = 'Bullish trend: Price above MA10 and MA10 above MA50'; }
-      else if (currentMA10 < currentMA50 && currentPrice < currentMA10) { signal.recommendation = 'Sell'; signal.reason = 'Bearish trend: Price below MA10 and MA10 below MA50'; }
+      if (currentMA10 > ma50Last && currentPrice > currentMA10) { signal.recommendation = 'Buy'; signal.reason = 'Bullish trend: Price above MA10 and MA10 above MA50'; }
+      else if (currentMA10 < ma50Last && currentPrice < currentMA10) { signal.recommendation = 'Sell'; signal.reason = 'Bearish trend: Price below MA10 and MA10 below MA50'; }
       const shortTermMomentum = ((currentPrice - closes[closes.length - 5]) / closes[closes.length - 5]) * 100;
       if (Math.abs(shortTermMomentum) > 3) signal.momentum = `${shortTermMomentum.toFixed(2)}% over last 5 periods`;
       return signal;
@@ -763,9 +818,9 @@
       try {
         const posts = await Promise.allSettled(watchlist.map(async (symbol) => {
           try {
-            const basePrices = { 'AAPL':180+(Math.random()-0.5)*10, 'MSFT':330+(Math.random()-0.5)*15, 'GOOGL':140+(Math.random()-0.5)*8, 'TSLA':200+(Math.random()-0.5)*20, 'BTC':50000+(Math.random()-0.5)*2000, 'ETH':3000+(Math.random()-0.5)*200, 'AMZN':170+(Math.random()-0.5)*10, 'NVDA':450+(Math.random()-0.5)*25, 'META':320+(Math.random()-0.5)*15 };
-            const basePrice = basePrices[symbol] || 100 + (Math.random()-0.5)*50;
-            const change = (Math.random()-0.5) * basePrice * 0.1;
+            const basePrices = { 'AAPL':180+(Math.random()-0.5)*5, 'MSFT':330+(Math.random()-0.5)*8, 'GOOGL':140+(Math.random()-0.5)*4, 'TSLA':200+(Math.random()-0.5)*10, 'BTC':50000+(Math.random()-0.5)*1000, 'ETH':3000+(Math.random()-0.5)*100, 'AMZN':170+(Math.random()-0.5)*5, 'NVDA':450+(Math.random()-0.5)*12, 'META':320+(Math.random()-0.5)*8 };
+            const basePrice = basePrices[symbol] || 100 + (Math.random()-0.5)*25;
+            const change = (Math.random()-0.5) * basePrice * 0.05;
             const currentPrice = basePrice + change;
             const changePercent = (change/basePrice)*100;
             const changeClass = change >= 0 ? 'text-emerald-600' : 'text-red-600';
@@ -792,27 +847,31 @@
       chartTitle.textContent = `Loading ${currentSymbol} (${range})...`;
       chartTitle.classList.add('loading');
 
+      // Clear previous state
+      if (binanceWS) try { binanceWS.close(); } catch(e) {}
+      stopFallbackData();
+      tradeBuffer = [];
+      currentBucket = null;
+      liveLineBuffer = [];
+      lastUpdate = 0;
+
       try {
         let data;
-        if (['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol)) {
+        const isCrypto = ['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol);
+        if (isCrypto) {
           data = await fetchCryptoData(currentSymbol);
-          currentBucket = null;
-          liveLineBuffer = [];
           connectBinance(currentSymbol + 'USDT');
         } else {
           data = await fetchStockData(currentSymbol, range);
-          if (binanceWS) try { binanceWS.close(); } catch(e) {}
-          updateWebSocketStatus('disconnected', 'Not available for stocks');
-          stopFallbackData();
-          currentBucket = null;
-          liveLineBuffer = [];
+          updateWebSocketStatus('disconnected', 'Using simulated data for stocks');
+          startFallbackData(currentSymbol);
         }
 
-        renderChart(data.ohlc, currentSymbol);
+        renderChart(data.ohlc, currentSymbol, isCrypto);
         chartUpdated.textContent = data.last ? new Date(data.last).toLocaleString() : 'Just now';
         updateAdvisories(currentSymbol, data);
         chartTitle.classList.remove('loading');
-        chartTitle.textContent = `${currentSymbol} (${range}) - Last: $${(liveLineBuffer[liveLineBuffer.length - 1]?.y || data.ohlc[data.ohlc.length - 1]?.c || 0).toFixed(2)}`;
+        chartTitle.textContent = `${currentSymbol} (${range}) - Last: $${(liveLineBuffer[liveLineBuffer.length - 1]?.y || data.ohlc[data.ohlc.length - 1]?.c || 0).toFixed(currentSymbol === 'BTC' || currentSymbol === 'ETH' ? 2 : 4)}`;
       } catch (error) {
         console.error(`Error loading symbol ${currentSymbol}:`, error);
         chartTitle.classList.remove('loading');
@@ -910,9 +969,6 @@
       setInterval(() => {
         loadCryptoAdvice(); loadPosts();
         if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) loadNews();
-        if (currentSymbol && !useFallbackData && ['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol)) {
-          connectBinance(currentSymbol + 'USDT');
-        }
       }, 60000);
     });
   </script>
