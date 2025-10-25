@@ -3,99 +3,122 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>JDGlobal Markets — Full Live Dashboard</title>
-  <meta name="description" content="Advanced finance dashboard with candlestick charts, indicators, trade advisories, crypto/forex signals and news thumbnails." />
+  <title>JDGlobal Markets — BTCUSDT Live Dashboard</title>
 
   <!-- Chart.js + Financial plugin -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
-  <!-- Zoom & Pan plugin for Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
-  <!-- Tailwind CDN for quick styling -->
+  <!-- Tailwind for UI -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
-    html, body { height: 100%; }
-    body { font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif; background: #f6f8fb; color: #0b2240; margin: 0; padding: 18px; }
-    #app { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 18px; border: 1px solid #e6eef6; box-shadow: 0 12px 40px rgba(13,30,50,0.06); }
-    .grid-main { display: grid; grid-template-columns: 320px 1fr; gap: 18px; margin-top: 16px; align-items: start; }
-    .card { background: #fff; border: 1px solid #eef6fb; border-radius: 10px; padding: 12px; }
-    .chartWrap { background:#f8fafc; border-radius:8px; padding:12px; }
-    canvas { width: 100% !important; display: block; }
-    .meta { color: #6b7b8c; }
-    .loading { opacity: 0.6; }
-    .pulse { animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%{opacity:1} 50%{opacity:0.5} 100%{opacity:1} }
-    .zoom-slider { width: 180px; }
-    .small { font-size: 12px; }
-    .btn { padding:6px 10px; border-radius:8px; background:#0b76d1; color:#fff; cursor:pointer; font-size:13px; }
-    .btn-muted { background:#eef6fb; color:#0b2240; border:1px solid #e6eef6; }
-    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .subcharts { display:grid; grid-template-columns:1fr 1fr; gap: 12px; margin-top:12px; }
-    @media (max-width:900px) { .grid-main { grid-template-columns: 1fr; } .subcharts{grid-template-columns:1fr;} }
+    :root{
+      --bg: #0b1220;
+      --card: #0f1724;
+      --muted: #93a4b6;
+      --text: #e6eef6;
+      --accent: #1fb6ff;
+      --up: #16a34a;
+      --down: #ef4444;
+      --surface: #081025;
+    }
+    :root.light{
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --muted: #6b7b8c;
+      --text: #0b2240;
+      --accent: #0b76d1;
+      --up: #00cc00;
+      --down: #ff3333;
+      --surface: #ffffff;
+    }
+
+    html,body{height:100%}
+    body{
+      font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+      margin:0;padding:18px;background:var(--bg);color:var(--text);
+    }
+    #app{max-width:1200px;margin:0 auto;background:var(--card);border-radius:12px;padding:18px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 12px 40px rgba(0,0,0,0.4);}
+    .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.03)}
+    .left {display:flex;gap:12px;align-items:center}
+    .btn {background:var(--accent);color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer;border:none}
+    .btn-muted {background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
+    .grid-main { display:grid; grid-template-columns:320px 1fr; gap:18px; margin-top:16px; align-items:start; }
+    .card{background:var(--card);border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,0.03)}
+    .chartWrap{background:var(--surface);border-radius:8px;padding:12px;margin-top:12px}
+    canvas{display:block;width:100% !important}
+    .meta{color:var(--muted)}
+    .small{font-size:12px}
+    .theme-toggle{display:flex;gap:8px;align-items:center}
+    .subcharts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+    @media (max-width:900px){ .grid-main{grid-template-columns:1fr} .subcharts{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
   <div id="app">
-    <div class="header flex items-center justify-between pb-3 border-b border-slate-100">
-      <div class="flex items-center gap-4">
-        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-sky-50 to-white flex items-center justify-center text-sky-600 font-extrabold text-lg shadow-sm">JDG</div>
+    <div class="header">
+      <div class="left">
+        <div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),transparent);display:flex;align-items:center;justify-content:center;font-weight:700">JDG</div>
         <div>
-          <div class="text-lg font-semibold">JDGlobal Markets</div>
-          <div class="text-sm meta">Real-time candlesticks, indicators, trade advisories & market news</div>
+          <div style="font-size:18px;font-weight:600">JDGlobal Markets</div>
+          <div class="meta small">Live BTCUSDT Candlesticks, Indicators & News</div>
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
-        <input id="globalSearch" placeholder="Symbol e.g. AAPL, TSLA, BTC, EURUSD" class="px-3 py-2 rounded-lg border card-border text-sm focus:outline-none" />
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="theme-toggle">
+          <label class="meta small">Theme</label>
+          <button id="themeBtn" class="btn-muted small">Toggle</button>
+        </div>
+        <input id="globalSearch" placeholder="Symbol: BTCUSDT, AAPL, EURUSD" style="padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)"/>
         <button id="loadBtn" class="btn">Load</button>
       </div>
     </div>
 
     <main class="grid-main">
-      <aside class="left flex flex-col gap-4">
+      <aside class="left-col">
         <div class="card">
-          <h4>Watchlist</h4>
-          <div id="watchlist">Loading…</div>
-          <div class="mt-2"><small class="meta">Tip: For forex use EURUSD, for crypto use BTC,ETH; stocks use ticker symbols.</small></div>
+          <h4 style="margin:0">Watchlist</h4>
+          <div id="watchlist" class="mt-2 meta small">Loading…</div>
         </div>
 
-        <div class="card">
-          <h4>Trade Advisories</h4>
-          <div id="advisories" class="advice">Loading advisories…</div>
+        <div class="card mt-3">
+          <h4 style="margin:0">Trade Advisories</h4>
+          <div id="advisories" class="mt-2 meta small">Loading…</div>
         </div>
 
-        <div class="card">
-          <h4>Crypto Suggestions</h4>
-          <div id="cryptoAdvice" class="advice">Loading crypto suggestions…</div>
+        <div class="card mt-3">
+          <h4 style="margin:0">Crypto Suggestions</h4>
+          <div id="cryptoAdvice" class="mt-2 meta small">Loading…</div>
         </div>
       </aside>
 
-      <section class="mainSection">
-        <div class="card chartCard">
-          <div class="chartToolbar flex items-center gap-3 flex-wrap">
-            <div><strong id="chartTitle">Select a symbol</strong></div>
-            <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
+      <section>
+        <div class="card">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div><strong id="chartTitle">BTCUSDT (Live)</strong></div>
+            <div style="margin-left:auto" class="meta small">Updated: <span id="chartUpdated">—</span></div>
 
-            <div id="timeRange" class="flex gap-2"></div>
-            <div id="chartType" class="flex gap-2"></div>
+            <div id="timeRange" style="display:flex;gap:6px"></div>
+            <div id="chartType" style="display:flex;gap:6px"></div>
 
-            <select id="indicatorSelect" class="indicatorSelect ml-2 px-3 py-1 border rounded-lg card-border text-sm">
+            <select id="indicatorSelect" style="padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)">
               <option value="none">MA: None</option>
               <option value="ma10">MA10</option>
               <option value="ma20">MA20</option>
               <option value="ma50">MA50</option>
             </select>
 
-            <div class="ml-2 flex items-center gap-2">
-              <label class="text-xs meta">Zoom</label>
-              <input id="zoomSlider" class="zoom-slider" type="range" min="1" max="100" value="100" />
+            <div style="display:flex;align-items:center;gap:8px">
+              <label class="meta small">Zoom</label>
+              <input id="zoomSlider" type="range" min="1" max="100" value="100"/>
             </div>
           </div>
 
-          <div class="chartWrap mt-3 rounded-lg overflow-hidden">
+          <div class="chartWrap">
             <canvas id="ohlcChart" height="380" aria-label="OHLC candlestick chart"></canvas>
             <div class="subcharts">
               <canvas id="rsiChart" height="120" aria-label="RSI chart"></canvas>
@@ -105,167 +128,158 @@
 
           <div style="margin-top:12px">
             <strong>Market News</strong>
-            <div class="newsGrid grid grid-cols-3 gap-3 mt-2" id="newsGrid">Loading news…</div>
+            <div id="newsGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px"></div>
           </div>
         </div>
 
         <div class="card mt-3">
           <h4 style="margin-top:0">Market Watch Posts</h4>
-          <div class="postsGrid grid grid-cols-3 gap-3" id="postsArea">Loading posts…</div>
+          <div id="postsArea" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px"></div>
         </div>
       </section>
     </main>
 
-    <footer class="mt-5 pt-4 border-t border-slate-100 flex flex-col md:flex-row items-start justify-between gap-4">
-      <div>
-        <div class="font-semibold">Market Pulse</div>
-        <div class="meta">Real Markets Data and Analysis Dashboard by JDG Team</div>
-      </div>
-
-      <div class="contact card" style="width:360px">
-        <strong>Contact</strong>
-        <div class="meta">Messages will be prepared for: <strong>wambuamwanza6@gmail.com</strong></div>
-        <input id="name" placeholder="Your name" class="mt-3 px-3 py-2 w-full rounded-lg border card-border text-sm" />
-        <input id="email" placeholder="Your email" class="mt-2 px-3 py-2 w-full rounded-lg border card-border text-sm" />
-        <textarea id="message" rows="4" placeholder="Your message" class="mt-2 px-3 py-2 w-full rounded-lg border card-border text-sm"></textarea>
-        <button id="sendBtn" class="mt-3 btn">Send</button>
-        <div id="sendStatus" class="meta mt-2 text-sm"></div>
-      </div>
+    <footer style="margin-top:16px;color:var(--muted);font-size:13px">
+      Market Pulse — Real Markets Data & Analysis Dashboard by JDG Team
     </footer>
   </div>
 
   <script>
-  // ---------------------
-  // Configuration & State
-  // ---------------------
-  const ALPHA_VANTAGE_API_KEY = 'INZ7GV3B33PXV2QM'; // replace in prod with server-side secret
-  const DATA_CACHE_MS = 60 * 1000;
-  const NEWS_UPDATE_INTERVAL = 5 * 60 * 1000;
-  const cryptoSet = new Set(['BTC','ETH','BNB','ADA','SOL','DOT','DOGE','XRP','LTC','LINK']);
-  let currentSymbol = 'BTC';
+  // -------------------------
+  // Configuration & globals
+  // -------------------------
+  const ALPHA_VANTAGE_API_KEY = 'INZ7GV3B33PXV2QM';
+  const MAX_POINTS = 200;             // <--- keeps the moving window bounded
+  const LIVE_LINE_MAX = 200;         // live overlay length
+  const cryptoSet = new Set(['BTC','ETH','BNB','ADA','SOL','DOT','DOGE','XRP','LTC','LINK','BTCUSDT','ETHUSDT']);
+
+  let currentSymbol = 'BTCUSDT';     // default as requested
   let currentRange = '1D';
   let currentChartType = 'candlestick';
   let currentIndicator = 'none';
+
   let ohlcChart = null, rsiChart = null, macdChart = null;
   let binanceWS = null;
-  let liveBuffer = []; // per-second live points {x:ts, y:price}
+  let liveLineBuffer = []; // sliding buffer of recent ticks for overlay
+  let currentBucket = null; // per-second candle bucket
   const dataCache = new Map();
 
   const $ = id => document.getElementById(id);
 
-  // ---------------------
-  // Utilities
-  // ---------------------
-  async function fetchWithTimeout(url, timeout = 8000) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(id);
-      return res;
-    } catch (e) {
-      clearTimeout(id);
-      throw e;
-    }
+  // -------------------------
+  // Theme toggle
+  // -------------------------
+  function setTheme(theme) {
+    if (theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+    localStorage.setItem('jdg_theme', theme);
+    // update chart colors if charts exist
+    updateChartTheme();
   }
-
-  function formatCurrency(v) {
-    if (v === null || v === undefined || isNaN(v)) return '-';
-    return v < 1 ? v.toFixed(4) : v.toFixed(2);
+  function toggleTheme() {
+    const cur = localStorage.getItem('jdg_theme') || 'dark';
+    setTheme(cur === 'dark' ? 'light' : 'dark');
   }
+  document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+  // initialize theme
+  (function initTheme(){ const saved = localStorage.getItem('jdg_theme') || 'dark'; setTheme(saved); })();
 
-  function msToDate(ms) { return new Date(ms); }
-
-  // ---------------------
-  // Indicators: SMA, RSI, MACD
-  // ---------------------
-  function sma(array, period) {
-    const res = [];
-    for (let i = 0; i < array.length; i++) {
-      if (i < period - 1) { res.push(null); continue; }
+  // -------------------------
+  // Indicator helpers
+  // -------------------------
+  function sma(values, period) {
+    const out = [];
+    for (let i = 0; i < values.length; i++) {
+      if (i < period - 1) { out.push(null); continue; }
       let sum = 0;
-      for (let j = 0; j < period; j++) sum += array[i - j] || 0;
-      res.push(sum / period);
+      for (let j = 0; j < period; j++) sum += values[i-j] || 0;
+      out.push(sum / period);
     }
-    return res;
+    return out;
   }
 
-  function rsi(prices, period = 14) {
-    if (!prices || prices.length < period + 1) return [];
+  function rsiCalc(prices, period = 14) {
+    if (!prices || prices.length < period+1) return [];
     const deltas = [];
-    for (let i = 1; i < prices.length; i++) deltas.push(prices[i] - prices[i - 1]);
-    let seed = deltas.slice(0, period);
+    for (let i = 1; i < prices.length; i++) deltas.push(prices[i] - prices[i-1]);
     let up = 0, down = 0;
-    seed.forEach(d => { if (d >= 0) up += d; else down += Math.abs(d); });
-    up /= period; down /= period;
-    const rs = up / (down || 1e-9);
-    const rsiArr = Array(period).fill(null);
-    rsiArr.push(100 - 100 / (1 + rs));
-    for (let i = period; i < deltas.length; i++) {
-      const delta = deltas[i];
-      let upval = delta > 0 ? delta : 0;
-      let downval = delta < 0 ? Math.abs(delta) : 0;
-      up = (up * (period - 1) + upval) / period;
-      down = (down * (period - 1) + downval) / period;
-      const rsLocal = up / (down || 1e-9);
-      rsiArr.push(100 - 100 / (1 + rsLocal));
+    for (let i = 0; i < period; i++) {
+      const d = deltas[i];
+      if (d >= 0) up += d; else down += Math.abs(d);
     }
-    // align with prices: make length = prices.length, values shifted by 1 because deltas start at index1
-    return [null].concat(rsiArr.slice(0, prices.length - 1));
+    up /= period; down /= period;
+    const rsi = Array(period).fill(null);
+    rsi.push(100 - 100 / (1 + (up/(down || 1e-9))));
+    for (let i = period; i < deltas.length; i++) {
+      const d = deltas[i];
+      up = (up * (period-1) + (d > 0 ? d : 0)) / period;
+      down = (down * (period-1) + (d < 0 ? Math.abs(d) : 0)) / period;
+      rsi.push(100 - 100 / (1 + (up/(down || 1e-9))));
+    }
+    // align with prices length (prepend null)
+    return [null].concat(rsi.slice(0, prices.length - 1));
   }
 
-  function macd(prices, shortPeriod = 12, longPeriod = 26, signalPeriod = 9) {
-    // EMA helper
-    function ema(values, period) {
-      const k = 2 / (period + 1);
-      const res = [];
-      let emaPrev = values.slice(0, period).reduce((a,b)=>a+b,0)/period;
-      for (let i = 0; i < values.length; i++) {
-        if (i < period - 1) { res.push(null); continue; }
-        if (i === period -1) { res.push(emaPrev); continue; }
-        emaPrev = values[i] * k + emaPrev * (1 - k);
-        res.push(emaPrev);
+  function macdCalc(prices, short = 12, long = 26, signal = 9) {
+    function ema(vals, period) {
+      const k = 2/(period+1);
+      const out = [];
+      let emaPrev = vals.slice(0, period).reduce((a,b)=>a+b,0)/period;
+      for (let i = 0; i < vals.length; i++) {
+        if (i < period-1) { out.push(null); continue; }
+        if (i === period -1) { out.push(emaPrev); continue; }
+        emaPrev = vals[i]*k + emaPrev*(1-k);
+        out.push(emaPrev);
       }
-      return res;
+      return out;
     }
-    const shortEMA = ema(prices, shortPeriod);
-    const longEMA = ema(prices, longPeriod);
-    const macdLine = prices.map((_, i) => {
-      const s = shortEMA[i]; const l = longEMA[i];
-      return (s !== null && l !== null) ? (s - l) : null;
-    });
-    const signalLine = ema(macdLine.map(v => v===null?0:v), signalPeriod).map(v => isFinite(v)?v:null);
-    const hist = macdLine.map((m,i) => (m !== null && signalLine[i] !== null) ? (m - signalLine[i]) : null);
+    const shortEMA = ema(prices, short);
+    const longEMA = ema(prices, long);
+    const macdLine = prices.map((_,i)=> (shortEMA[i]!=null && longEMA[i]!=null) ? shortEMA[i]-longEMA[i] : null);
+    const signalLine = ema(macdLine.map(x=>x===null?0:x), signal).map(v => isFinite(v)?v:null);
+    const hist = macdLine.map((m,i) => (m != null && signalLine[i] != null) ? m - signalLine[i] : null);
     return { macd: macdLine, signal: signalLine, hist };
   }
 
-  // ---------------------
-  // Chart creation helpers
-  // ---------------------
+  // -------------------------
+  // Chart creation and theme updates
+  // -------------------------
+  function chartColors() {
+    // pick colors based on theme
+    const isLight = document.documentElement.classList.contains('light');
+    return {
+      text: isLight ? '#0b2240' : '#e6eef6',
+      grid: isLight ? 'rgba(11,34,64,0.06)' : 'rgba(255,255,255,0.04)',
+      up: isLight ? '#00cc00' : '#16a34a',
+      down: isLight ? '#ff3333' : '#ef4444',
+      accent: isLight ? '#0b76d1' : '#1fb6ff'
+    };
+  }
+
   function createCharts() {
+    // destroy if exists
+    if (ohlcChart) try { ohlcChart.destroy(); } catch(e){}
+    if (rsiChart) try { rsiChart.destroy(); } catch(e){}
+    if (macdChart) try { macdChart.destroy(); } catch(e){}
+
+    const colors = chartColors();
     const ctx = $('ohlcChart').getContext('2d');
     const rsiCtx = $('rsiChart').getContext('2d');
     const macdCtx = $('macdChart').getContext('2d');
 
-    // destroy existing
-    if (ohlcChart) try { ohlcChart.destroy(); } catch(e){};
-    if (rsiChart) try { rsiChart.destroy(); } catch(e){};
-    if (macdChart) try { macdChart.destroy(); } catch(e){};
-
-    // Main Chart
     ohlcChart = new Chart(ctx, {
       type: currentChartType === 'candlestick' ? 'candlestick' : 'line',
       data: { datasets: [] },
       options: {
-        animation: false,
-        maintainAspectRatio: false,
+        animation:false,
+        maintainAspectRatio:false,
         plugins: {
-          legend: { display: true },
-          tooltip: { mode: 'index', intersect: false }
+          legend:{display:true,labels:{color:colors.text}},
+          tooltip:{mode:'index',intersect:false,backgroundColor:colors.text, titleColor:colors.text, bodyColor:colors.text}
         },
         scales: {
-          x: { type: 'time', time: { unit: currentRange === '1D' ? 'hour' : 'day', displayFormats: { hour:'HH:mm', day:'MMM dd' } } },
-          y: { beginAtZero: false }
+          x:{ type:'time', time:{ unit: currentRange === '1D'? 'hour':'day' }, grid:{color:colors.grid}, ticks:{color:colors.text} },
+          y:{ grid:{color:colors.grid}, ticks:{color:colors.text} }
         },
         plugins: {
           zoom: {
@@ -276,573 +290,519 @@
       }
     });
 
-    // RSI Chart
     rsiChart = new Chart(rsiCtx, {
-      type: 'line',
-      data: { datasets: [{ label: 'RSI', data: [], borderColor: '#ff7f0e', pointRadius:0, borderWidth:1 }]},
+      type:'line',
+      data: { datasets: [{ label:'RSI', data:[], borderColor:colors.accent, pointRadius:0 }] },
       options: {
-        animation: false,
-        maintainAspectRatio: false,
-        scales: { x: { type:'time' }, y: { min:0, max:100 } },
-        plugins: { legend: { display: false } }
+        animation:false, maintainAspectRatio:false,
+        scales:{ x:{ type:'time', ticks:{color:colors.text}, grid:{color:colors.grid} }, y:{ min:0, max:100, ticks:{color:colors.text}, grid:{color:colors.grid} } },
+        plugins:{ legend:{ display:false } }
       }
     });
 
-    // MACD Chart
     macdChart = new Chart(macdCtx, {
-      type: 'bar',
+      type:'bar',
       data: { datasets: [
-        { label:'MACD Hist', data: [], backgroundColor: ctx => ctx.raw >= 0 ? 'rgba(0,200,0,0.5)' : 'rgba(200,0,0,0.5)' },
-        { label:'MACD Line', type:'line', data: [], borderColor:'#1e90ff', pointRadius:0, borderWidth:1 },
-        { label:'Signal Line', type:'line', data: [], borderColor:'#ff7f0e', pointRadius:0, borderWidth:1 }
-      ]},
+        { label:'MACD Hist', data:[], backgroundColor: (ctx) => ctx.raw && ctx.raw.y >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)' },
+        { label:'MACD', type:'line', data:[], borderColor:colors.accent, pointRadius:0, borderWidth:1 },
+        { label:'Signal', type:'line', data:[], borderColor:'#ff7f0e', pointRadius:0, borderWidth:1 }
+      ] },
       options: {
-        animation: false,
-        maintainAspectRatio: false,
-        scales: { x: { type:'time' }, y: {} },
-        plugins: { legend: { display: false } }
+        animation:false, maintainAspectRatio:false,
+        scales:{ x:{ type:'time', ticks:{color:colors.text}, grid:{color:colors.grid} }, y:{ ticks:{color:colors.text}, grid:{color:colors.grid} } },
+        plugins:{ legend:{ display:false } }
       }
     });
   }
 
-  // ---------------------
-  // Data fetching
-  // ---------------------
-  async function fetchStockOHLC(symbol, range='1D') {
-    const cacheKey = `stock_${symbol}_${range}`;
-    const cached = dataCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < DATA_CACHE_MS) return cached.val;
+  function updateChartTheme() {
+    if (!ohlcChart) return;
+    const colors = chartColors();
+    // scales
+    ohlcChart.options.scales.x.ticks.color = colors.text;
+    ohlcChart.options.scales.x.grid = { color: colors.grid };
+    ohlcChart.options.scales.y.ticks = { color: colors.text };
+    ohlcChart.options.scales.y.grid = { color: colors.grid };
+    // update legend & tooltip colors via reassign (Chart.js reads options)
+    ohlcChart.update();
 
-    try {
-      const ranges = { '1D':'1d','1W':'5d','1M':'1mo','3M':'3mo','1Y':'1y' };
-      const yahooRange = ranges[range] || '1d';
-      const interval = range === '1D' ? '5m' : '1d';
-      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${yahooRange}&interval=${interval}`;
-      const proxy = 'https://api.allorigins.win/raw?url=';
-      const res = await fetchWithTimeout(proxy + encodeURIComponent(yahooUrl), 6000);
-      const json = await res.json();
-      if (!json.chart?.result?.[0]) throw new Error('No data from Yahoo');
-
-      const r = json.chart.result[0];
-      const quotes = r.indicators.quote[0];
-      const timestamps = r.timestamp;
-      const ohlc = timestamps.map((t,i) => ({ t: t*1000, o: quotes.open[i], h: quotes.high[i], l: quotes.low[i], c: quotes.close[i] }))
-                     .filter(d => d.c > 0 && d.o > 0);
-
-      dataCache.set(cacheKey, { ts: Date.now(), val: { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : null } });
-      return { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : null };
-    } catch (err) {
-      console.warn('Yahoo failed, trying Alpha Vantage', err);
-      // Alpha Vantage fallback
-      try {
-        const functionName = range === '1D' ? 'TIME_SERIES_INTRADAY' : 'TIME_SERIES_DAILY';
-        const interval = range === '1D' ? '5min' : 'daily';
-        const url = `https://www.alphavantage.co/query?function=${functionName}&symbol=${symbol}&interval=${interval}&apikey=${ALPHA_VANTAGE_API_KEY}&outputsize=compact`;
-        const res = await fetchWithTimeout(url, 7000);
-        const json = await res.json();
-        const timeseries = range === '1D' ? json['Time Series (5min)'] : json['Time Series (Daily)'];
-        if (!timeseries) throw new Error('AlphaVantage no data');
-        const dates = Object.keys(timeseries).sort();
-        const ohlc = dates.map(d => {
-          const e = timeseries[d];
-          return { t: new Date(d).getTime(), o: parseFloat(e['1. open']), h: parseFloat(e['2. high']), l: parseFloat(e['3. low']), c: parseFloat(e['4. close']) };
-        }).reverse();
-        dataCache.set(cacheKey, { ts: Date.now(), val: { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : null } });
-        return { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : null };
-      } catch (avErr) {
-        console.error('AlphaVantage failed', avErr);
-        throw new Error('Unable to fetch stock data');
-      }
+    if (rsiChart) {
+      rsiChart.options.scales.x.ticks.color = colors.text;
+      rsiChart.options.scales.y.ticks.color = colors.text;
+      rsiChart.update();
+    }
+    if (macdChart) {
+      macdChart.options.scales.x.ticks.color = colors.text;
+      macdChart.options.scales.y.ticks.color = colors.text;
+      macdChart.update();
     }
   }
 
+  // -------------------------
+  // Data fetch helpers (CoinGecko, Yahoo + AlphaVantage fallback)
+  // -------------------------
   async function fetchCryptoOHLC(symbol) {
     const cacheKey = `crypto_${symbol}`;
     const cached = dataCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < DATA_CACHE_MS) return cached.val;
+    if (cached && (Date.now() - cached.ts < 60000)) return cached.val;
     try {
       const coinMap = { 'BTC':'bitcoin','ETH':'ethereum','ADA':'cardano','SOL':'solana','DOT':'polkadot','DOGE':'dogecoin','XRP':'ripple','LTC':'litecoin','BNB':'binancecoin','LINK':'chainlink' };
-      const coinId = coinMap[symbol] || symbol.toLowerCase();
-      const res = await fetchWithTimeout(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=30`, 6000);
+      const coin = coinMap[symbol.replace('USDT','')] || symbol.toLowerCase();
+      const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coin}/ohlc?vs_currency=usd&days=7`);
       const json = await res.json();
-      if (!json || json.length == 0) throw new Error('No crypto OHLC');
-      const ohlc = json.map(item => ({ t: item[0], o: item[1], h: item[2], l: item[3], c: item[4] }));
-      dataCache.set(cacheKey, { ts: Date.now(), val: { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : null } });
-      return { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : null };
+      const ohlc = json.map(i => ({ t: i[0], o:i[1], h:i[2], l:i[3], c:i[4] }));
+      dataCache.set(cacheKey, { ts: Date.now(), val: { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : Date.now() } });
+      return { ohlc, last: ohlc.length ? ohlc[ohlc.length-1].t : Date.now() };
     } catch (e) {
       console.error('CoinGecko failed', e);
       throw new Error('Unable to fetch crypto OHLC');
     }
   }
 
-  // ---------------------
-  // Render functions: convert fetched data into Chart datasets and render
-  // ---------------------
-  function buildDatasetsFromOHLC(ohlc, label) {
-    // ohlc: [{t,o,h,l,c}, ...] where t in ms
-    const baseDataset = (currentChartType === 'candlestick') ? {
-      label,
-      data: ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c })),
-      type: 'candlestick',
-      color: { up: '#00cc00', down: '#ff3333' }
-    } : {
-      label: label + ' Price',
-      data: ohlc.map(d => ({ x: d.t, y: d.c })),
-      type: 'line',
-      borderColor: '#0b76d1',
-      borderWidth: 1.6,
-      pointRadius: 0,
-      tension: 0.2
-    };
-
-    const datasets = [baseDataset];
-
-    // indicator MA overlays
-    if (currentIndicator !== 'none') {
-      const n = parseInt(currentIndicator.replace('ma',''));
-      const closes = ohlc.map(d => d.c);
-      const maVals = sma(closes, n);
-      const maData = maVals.map((v,i) => v === null ? null : { x: ohlc[i].t, y: v }).filter(Boolean);
-      datasets.push({
-        label: `MA${n}`,
-        data: maData,
-        type: 'line',
-        borderColor: '#ff7f0e',
-        pointRadius: 0,
-        borderWidth: 1.4,
-      });
-    }
-
-    return datasets;
-  }
-
-  function renderOHLCAndIndicators(ohlc, label) {
-    // main chart
-    const datasets = buildDatasetsFromOHLC(ohlc, label);
-    ohlcChart.data.datasets = datasets;
-    ohlcChart.update();
-
-    // RSI
-    const closes = ohlc.map(d => d.c);
-    const rsiVals = rsi(closes, 14).map((v,i) => v === null ? null : { x: ohlc[i].t, y: v }).filter(Boolean);
-    rsiChart.data.datasets[0].data = rsiVals;
-    rsiChart.update();
-
-    // MACD
-    const mac = macd(closes);
-    const macdPts = mac.macd.map((v,i) => v === null ? null : { x: ohlc[i].t, y: v }).filter(Boolean);
-    const macSig = mac.signal.map((v,i) => v === null ? null : { x: ohlc[i].t, y: v }).filter(Boolean);
-    const macHist = mac.hist.map((v,i) => v === null ? null : { x: ohlc[i].t, y: v }).filter(Boolean);
-
-    // Align datasets for charts: hist (bar), macd (line), signal(line)
-    macdChart.data.datasets[0].data = macHist;
-    macdChart.data.datasets[1].data = macdPts;
-    macdChart.data.datasets[2].data = macSig;
-    macdChart.update();
-  }
-
-  // ---------------------
-  // Live WebSocket handling (per-second updates)
-  // ---------------------
-  let liveSymbolLower = null;
-  let liveBucket = null; // current second bucket for candlestick building
-
-  function connectBinanceTradeStream(symbolUpper) {
-    // symbolUpper e.g., 'BTC' or 'BTCUSDT' or 'BTC' we will use lower 'btcusdt'
-    if (!symbolUpper) return;
-    const s = symbolUpper.toLowerCase().replace('/','').replace('usd','usdt'); // attempts to map Tickers
-    liveSymbolLower = s.includes('usdt') ? s : s + 'usdt';
-    if (binanceWS) try { binanceWS.close(); } catch(e) {}
-    const wsUrl = `wss://stream.binance.com:9443/ws/${liveSymbolLower}@trade`;
+  async function fetchStockOHLC(symbol, range='1D') {
+    const cacheKey = `stock_${symbol}_${range}`;
+    const cached = dataCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts < 60000)) return cached.val;
     try {
-      binanceWS = new WebSocket(wsUrl);
+      const ranges = { '1D':'1d','1W':'5d','1M':'1mo','3M':'3mo','1Y':'1y' };
+      const yahooRange = ranges[range] || '1d';
+      const interval = range === '1D' ? '5m' : '1d';
+      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${yahooRange}&interval=${interval}`;
+      // use allorigins proxy to avoid CORS
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`);
+      const json = await res.json();
+      const r = json.chart.result[0];
+      const quotes = r.indicators.quote[0];
+      const timestamps = r.timestamp;
+      const ohlc = timestamps.map((t,i) => ({ t: t*1000, o:quotes.open[i], h:quotes.high[i], l:quotes.low[i], c:quotes.close[i] })).filter(d=>d && d.c>0);
+      dataCache.set(cacheKey, { ts: Date.now(), val:{ ohlc, last: ohlc.length? ohlc[ohlc.length-1].t : Date.now() }});
+      return { ohlc, last: ohlc.length? ohlc[ohlc.length-1].t : Date.now() };
     } catch (e) {
-      console.error('WS create error', e);
+      console.warn('Yahoo failed, trying AlphaVantage', e);
+      try {
+        const functionName = range==='1D' ? 'TIME_SERIES_INTRADAY' : 'TIME_SERIES_DAILY';
+        const interval = range==='1D'?'5min':'daily';
+        const res = await fetch(`https://www.alphavantage.co/query?function=${functionName}&symbol=${symbol}&interval=${interval}&apikey=${ALPHA_VANTAGE_API_KEY}&outputsize=compact`);
+        const json = await res.json();
+        const series = range==='1D' ? json['Time Series (5min)'] : json['Time Series (Daily)'];
+        const dates = Object.keys(series).sort();
+        const ohlc = dates.map(d => {
+          const e = series[d];
+          return { t: new Date(d).getTime(), o: parseFloat(e['1. open']), h: parseFloat(e['2. high']), l: parseFloat(e['3. low']), c: parseFloat(e['4. close']) };
+        }).reverse();
+        dataCache.set(cacheKey, { ts: Date.now(), val:{ ohlc, last: ohlc.length? ohlc[ohlc.length-1].t : Date.now() }});
+        return { ohlc, last: ohlc.length? ohlc[ohlc.length-1].t : Date.now() };
+      } catch (av) {
+        console.error('AlphaVantage failed', av);
+        throw new Error('Unable to fetch stock data');
+      }
+    }
+  }
+
+  // -------------------------
+  // Live WebSocket: per-trade stream, per-second candle bucketing
+  // -------------------------
+  function connectBinance(symbol) {
+    // symbol expected like BTCUSDT (uppercase)
+    if (!symbol) return;
+    if (binanceWS) try { binanceWS.close(); } catch(e){}
+    const lower = symbol.toLowerCase();
+    const url = `wss://stream.binance.com:9443/ws/${lower}@trade`;
+    try {
+      binanceWS = new WebSocket(url);
+    } catch (e) {
+      console.error('WS connect error', e);
       return;
     }
 
-    binanceWS.onopen = () => {
-      console.log('Binance WS open for', liveSymbolLower);
-    };
-
+    binanceWS.onopen = () => console.log('Binance WS open for', symbol);
     binanceWS.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
-        // msg.p = price string, msg.T = tradeTime
+        // trade price 'p' and trade time 'T'
         const price = parseFloat(msg.p);
         const ts = msg.T || Date.now();
-        handleLiveTrade(price, ts);
-      } catch (e) {
-        // ignore
-      }
+        handleLiveTick(price, ts);
+      } catch (e) {}
     };
-
-    binanceWS.onerror = (err) => {
-      console.error('Binance WS error', err);
-    };
-
+    binanceWS.onerror = (err) => console.error('Binance WS error', err);
     binanceWS.onclose = () => {
       console.warn('Binance WS closed; reconnecting in 2s');
-      setTimeout(() => connectBinanceTradeStream(symbolUpper), 2000);
+      setTimeout(()=>connectBinance(symbol), 2000);
     };
   }
 
-  function handleLiveTrade(price, timestamp) {
-    // Build per-second candle for live overlay and push to liveBuffer (line)
-    const tSec = Math.floor(timestamp / 1000) * 1000;
-    if (!liveBucket || liveBucket.t !== tSec) {
-      // new bucket
-      const newBucket = { t: tSec, o: price, h: price, l: price, c: price };
-      liveBucket = newBucket;
-      // push to liveBuffer as a line point (latest price)
-      liveBuffer.push({ x: timestamp, y: price });
-      if (liveBuffer.length > 300) liveBuffer.shift();
-      // add new candle to chart (if main dataset candlestick)
+  function handleLiveTick(price, ts) {
+    // bucket by second
+    const sec = Math.floor(ts/1000)*1000;
+    if (!currentBucket || currentBucket.t !== sec) {
+      // new second bucket
+      currentBucket = { t: sec, o: price, h: price, l: price, c: price };
+      // append new candle (or new line point)
       if (currentChartType === 'candlestick') {
-        // if underlying ohlcChart has a candlestick dataset, append
-        const dsIndex = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
-        if (dsIndex !== -1) {
-          ohlcChart.data.datasets[dsIndex].data.push({ x: newBucket.t, o: newBucket.o, h: newBucket.h, l: newBucket.l, c: newBucket.c });
-          // keep size reasonable
-          if (ohlcChart.data.datasets[dsIndex].data.length > 500) ohlcChart.data.datasets[dsIndex].data.shift();
+        // find candlestick dataset
+        const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+        if (ds) {
+          ds.data.push({ x: currentBucket.t, o: currentBucket.o, h: currentBucket.h, l: currentBucket.l, c: currentBucket.c });
+          // bound length
+          if (ds.data.length > MAX_POINTS) ds.data.shift();
+        } else {
+          // no candlestick dataset (maybe line view) -> push into dataset[0] as point
+          const d0 = ohlcChart.data.datasets[0];
+          d0.data.push({ x: ts, y: price });
+          if (d0.data.length > MAX_POINTS) d0.data.shift();
         }
       } else {
-        // line chart: append last price point to dataset
-        const ds = ohlcChart.data.datasets[0];
-        ds.data.push({ x: timestamp, y: price });
-        if (ds.data.length > 500) ds.data.shift();
+        // line mode -> push point
+        const d0 = ohlcChart.data.datasets[0] || (ohlcChart.data.datasets[0] = { label: currentSymbol, data: [] });
+        d0.data.push({ x: ts, y: price });
+        if (d0.data.length > MAX_POINTS) d0.data.shift();
       }
     } else {
-      // update same bucket
-      liveBucket.h = Math.max(liveBucket.h, price);
-      liveBucket.l = Math.min(liveBucket.l, price);
-      liveBucket.c = price;
-      // update last candle on chart
+      // same second -> update bucket high/low/close
+      currentBucket.h = Math.max(currentBucket.h, price);
+      currentBucket.l = Math.min(currentBucket.l, price);
+      currentBucket.c = price;
       if (currentChartType === 'candlestick') {
-        const dsIndex = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
-        if (dsIndex !== -1) {
-          const arr = ohlcChart.data.datasets[dsIndex].data;
-          if (arr.length > 0) {
-            arr[arr.length -1].h = Math.max(arr[arr.length -1].h, price);
-            arr[arr.length -1].l = Math.min(arr[arr.length -1].l, price);
-            arr[arr.length -1].c = price;
-          }
+        const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+        if (ds && ds.data.length) {
+          const last = ds.data[ds.data.length - 1];
+          last.h = Math.max(last.h, price);
+          last.l = Math.min(last.l, price);
+          last.c = price;
         }
       } else {
-        const ds = ohlcChart.data.datasets[0];
-        if (ds.data.length > 0) {
-          ds.data[ds.data.length -1].y = price;
-        }
+        const d0 = ohlcChart.data.datasets[0];
+        if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = price;
       }
-      // push line buffer too
-      liveBuffer.push({ x: timestamp, y: price });
-      if (liveBuffer.length > 300) liveBuffer.shift();
     }
 
-    // Update live overlay dataset (a line dataset labeled LIVE:)
+    // maintain live line overlay buffer
+    liveLineBuffer.push({ x: ts, y: price });
+    if (liveLineBuffer.length > LIVE_LINE_MAX) liveLineBuffer.shift();
+
+    // find or create LIVE dataset and update it
     const liveLabel = `LIVE: ${currentSymbol}`;
     let liveIdx = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
-    const linePoints = liveBuffer.slice(-120).map(p => ({ x: p.x, y: p.y }));
+    const livePoints = liveLineBuffer.slice(-LIVE_LINE_MAX);
     if (liveIdx === -1) {
       ohlcChart.data.datasets.push({
         label: liveLabel,
-        data: linePoints,
+        data: livePoints,
         type: 'line',
-        borderColor: '#ff4d4d',
+        borderColor: document.documentElement.classList.contains('light') ? '#ff4d4d' : '#ff7f7f',
         backgroundColor: 'rgba(255,77,77,0.06)',
         pointRadius: 0,
-        borderWidth: 1.4,
-        tension: 0.2,
+        borderWidth: 1.2,
+        tension: 0.15,
         yAxisID: 'y'
       });
     } else {
-      ohlcChart.data.datasets[liveIdx].data = linePoints;
+      ohlcChart.data.datasets[liveIdx].data = livePoints;
     }
 
-    // Update RSI and MACD incrementally based on last N closes if possible (fast approach)
-    // For robust indicators, we recalc from main candlestick closes every N seconds (to keep correct)
-    // Here: recalc every update but throttle to 400ms to avoid heavy CPU
-    scheduleIndicatorsRecalc();
+    // keep candle dataset length bounded (find candlestick ds and trim)
+    const cndIdx = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
+    if (cndIdx !== -1) {
+      const ds = ohlcChart.data.datasets[cndIdx];
+      if (ds.data.length > MAX_POINTS) ds.data.splice(0, ds.data.length - MAX_POINTS);
+    } else {
+      // trim line dataset
+      if (ohlcChart.data.datasets[0] && ohlcChart.data.datasets[0].data.length > MAX_POINTS) {
+        ohlcChart.data.datasets[0].data.splice(0, ohlcChart.data.datasets[0].data.length - MAX_POINTS);
+      }
+    }
 
-    // Update chart visuals but without animation to be smooth
-    try {
-      ohlcChart.update('none');
-    } catch (e) { try { ohlcChart.update(); } catch(e2){} }
+    // throttle indicator recalcs slightly to avoid heavy CPU (set 400ms)
+    scheduleIndicatorRecalc();
+
+    // update chart quickly without animation
+    try { ohlcChart.update('none'); } catch (e) { try { ohlcChart.update(); } catch(e){} }
   }
 
-  // throttled recalc
-  let _indicatorScheduled = false;
-  function scheduleIndicatorsRecalc() {
-    if (_indicatorScheduled) return;
-    _indicatorScheduled = true;
-    setTimeout(() => {
-      _indicatorScheduled = false;
-      try {
-        // extract closes from candlestick dataset (prefer candlestick dataset)
-        let closes = [];
-        const candleDs = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
-        if (candleDs && candleDs.data && candleDs.data.length) {
-          closes = candleDs.data.map(d => d.c).filter(v=>v!=null);
-        } else if (ohlcChart.data.datasets[0] && ohlcChart.data.datasets[0].data) {
-          closes = ohlcChart.data.datasets[0].data.map(p => p.y).filter(v=>v!=null);
-        }
-        if (closes.length > 20) {
-          const lastOHLC = (candleDs && candleDs.data) ? candleDs.data.slice(-500).map(d => ({t:d.x, o:d.o, h:d.h, l:d.l, c:d.c})) : closes.map((c,i)=>({t:Date.now()-((closes.length-i)*1000), o:c, h:c, l:c, c}));
-          // recalc indicators using lastOHLC
-          renderOHLCAndIndicators(lastOHLC, currentSymbol);
-        }
-      } catch (e) { console.error('indicator recalc err', e); }
+  let _indicatorTimer = null;
+  function scheduleIndicatorRecalc() {
+    if (_indicatorTimer) return;
+    _indicatorTimer = setTimeout(() => {
+      _indicatorTimer = null;
+      recalcIndicators();
     }, 400);
   }
 
-  // ---------------------
-  // High-level loadSymbol flow
-  // ---------------------
-  async function loadSymbol(symbol, range='1D') {
-    if (!symbol) return;
-    const sUpper = symbol.toUpperCase().replace('USD','').replace('/USDT','').replace('/USD','');
-    currentSymbol = sUpper;
+  function recalcIndicators() {
+    try {
+      // extract closes
+      let closes = [];
+      const cnd = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+      if (cnd && cnd.data) closes = cnd.data.map(x => x.c).filter(v=>v!=null);
+      else if (ohlcChart.data.datasets[0]) closes = ohlcChart.data.datasets[0].data.map(x => x.y).filter(v=>v!=null);
+
+      if (!closes || closes.length < 10) return;
+
+      // RSI
+      const rsiVals = rsiCalc(closes, 14);
+      // map to chart points using matching timestamps from underlying candlestick or line dataset
+      let tsArr = [];
+      if (cnd && cnd.data) tsArr = cnd.data.map(d => d.x);
+      else if (ohlcChart.data.datasets[0] && ohlcChart.data.datasets[0].data) tsArr = ohlcChart.data.datasets[0].data.map(p => p.x);
+      const rsiPoints = [];
+      for (let i = 0; i < Math.min(tsArr.length, rsiVals.length); i++) {
+        if (rsiVals[i] != null) rsiPoints.push({ x: tsArr[i], y: rsiVals[i] });
+      }
+      rsiChart.data.datasets[0].data = rsiPoints;
+      rsiChart.update('none');
+
+      // MACD
+      const mac = macdCalc(closes);
+      const macdPts = [], macSigPts = [], macHistPts = [];
+      for (let i = 0; i < tsArr.length; i++) {
+        if (mac.macd[i] != null) macdPts.push({ x: tsArr[i], y: mac.macd[i] });
+        if (mac.signal[i] != null) macSigPts.push({ x: tsArr[i], y: mac.signal[i] });
+        if (mac.hist[i] != null) macHistPts.push({ x: tsArr[i], y: mac.hist[i] });
+      }
+      macdChart.data.datasets[0].data = macHistPts;
+      macdChart.data.datasets[1].data = macdPts;
+      macdChart.data.datasets[2].data = macSigPts;
+      macdChart.update('none');
+    } catch (e) { console.error('recalcIndicators error', e); }
+  }
+
+  // -------------------------
+  // UI helpers (render watchlist, news, posts, crypto advice)
+  // -------------------------
+  function getWatch() {
+    try { return JSON.parse(localStorage.getItem('mp_watch') || '["BTCUSDT","ETHUSDT","AAPL","TSLA","EURUSD"]'); }
+    catch(e){ return ['BTCUSDT','ETHUSDT','AAPL','TSLA','EURUSD']; }
+  }
+  function saveWatch(arr) { localStorage.setItem('mp_watch', JSON.stringify(arr)); }
+
+  function renderWatch() {
+    const list = getWatch();
+    const el = $('watchlist');
+    el.innerHTML = list.map(s => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.02)"><div><strong>${s}</strong></div><div style="display:flex;gap:6px"><button class="btn-muted" data-sym="${s}" onclick="loadSymbol('${s}')">View</button><button class="btn-muted" onclick="(function(sym){const arr=getWatch().filter(x=>x!==sym);saveWatch(arr);renderWatch();})('${s}')">Remove</button></div></div>`).join('');
+  }
+
+  async function loadPosts() {
+    const watch = getWatch().slice(0,6);
+    const el = $('postsArea');
+    el.innerHTML = watch.map(s => `<div style="background:var(--card);padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)"><strong>${s}</strong><div class="meta small">$${(100+Math.random()*900).toFixed(2)}</div></div>`).join('');
+  }
+
+  async function loadCryptoAdvice() {
+    const el = $('cryptoAdvice');
+    try {
+      const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+      const json = await res.json();
+      const top = ['BTCUSDT','ETHUSDT','BNBUSDT'];
+      const items = json.filter(i => top.includes(i.symbol)).slice(0,3).map(i=>`<div style="padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.02)"><strong>${i.symbol.replace('USDT','')}</strong><div class="meta small">${parseFloat(i.lastPrice).toFixed(2)} • ${parseFloat(i.priceChangePercent).toFixed(2)}%</div></div>`);
+      el.innerHTML = items.join('');
+    } catch (e) {
+      el.innerHTML = `<div class="meta">Crypto advice offline</div>`;
+    }
+  }
+
+  function loadNews() {
+    const el = $('newsGrid');
+    const fallback = [
+      {title:'Markets steady as BTC holds key level', img:'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600'},
+      {title:'Tech leads rally', img:'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600'},
+      {title:'Energy stocks stabilize', img:'https://images.unsplash.com/photo-1504893524553-b855bceeacef?w=600'}
+    ];
+    el.innerHTML = fallback.map(n => `<div style="background:var(--card);border-radius:8px;padding:6px;border:1px solid rgba(255,255,255,0.02)"><img src="${n.img}" style="width:100%;height:80px;object-fit:cover;border-radius:6px"/><div style="padding-top:6px"><strong class="small">${n.title}</strong></div></div>`).join('');
+  }
+
+  // -------------------------
+  // High-level loadSymbol (fetch historical OHLC + start ws for crypto)
+  // -------------------------
+  async function loadSymbol(rawSymbol, range='1D') {
+    if (!rawSymbol) return;
+    // normalize symbol input (allow BTCUSDT, BTC/USDT, BTC)
+    let sym = String(rawSymbol).toUpperCase().replace('/','');
+    // common mapping: if user types BTC -> BTCUSDT
+    if (/^[A-Z]{2,5}$/.test(sym) && !sym.endsWith('USDT') && !sym.includes('USD') && !sym.includes('EUR')) {
+      if (sym.length <= 5 && cryptoSet.has(sym)) sym = sym + 'USDT';
+    }
+    currentSymbol = sym;
     currentRange = range;
-    $('chartTitle').textContent = `Loading ${currentSymbol} (${currentRange})...`;
+
+    $('chartTitle').textContent = `${currentSymbol} (${currentRange}) - Loading...`;
     $('chartTitle').classList.add('loading');
 
-    // create charts
+    // re-create charts to ensure fresh theme colors
     createCharts();
 
     try {
-      let dataObj;
-      if (cryptoSet.has(currentSymbol)) {
-        dataObj = await fetchCryptoOHLC(currentSymbol);
-        // convert to proper ms timestamps (CoinGecko gives ms)
+      let ohlcData;
+      if (cryptoSet.has(currentSymbol) || currentSymbol.endsWith('USDT')) {
+        // crypto historical from CoinGecko (may not have USDT-permitted tickers but mapping is attempted)
+        const symbolBase = currentSymbol.replace('USDT','');
+        ohlcData = await fetchCryptoOHLC(symbolBase);
       } else {
-        dataObj = await fetchStockOHLC(currentSymbol, currentRange);
+        ohlcData = await fetchStockOHLC(currentSymbol, currentRange);
       }
-      const ohlc = dataObj.ohlc.map(d => ({ t: d.t, o: +d.o, h: +d.h, l: +d.l, c: +d.c }));
-      // set currentChartType datasets and render w/ indicators
-      const datasets = buildDatasetsFromOHLC(ohlc, currentSymbol);
+
+      // ensure arrays are objects: {t,o,h,l,c}
+      const ohlc = (ohlcData.ohlc || []).map(d => ({ t: +d.t, o:+d.o, h:+d.h, l:+d.l, c:+d.c }));
+      // create dataset(s)
+      const datasets = [];
+      if (currentChartType === 'candlestick') {
+        datasets.push({
+          label: currentSymbol,
+          data: ohlc.map(d => ({ x:d.t, o:d.o, h:d.h, l:d.l, c:d.c })),
+          type: 'candlestick',
+          color: { up: document.documentElement.classList.contains('light') ? '#00cc00' : '#16a34a', down: document.documentElement.classList.contains('light') ? '#ff3333' : '#ef4444' }
+        });
+      } else {
+        datasets.push({
+          label: currentSymbol + ' Price',
+          data: ohlc.map(d => ({ x:d.t, y:d.c })),
+          type: 'line',
+          borderColor: chartColors().accent,
+          borderWidth: 1.6,
+          pointRadius: 0,
+          tension: 0.2
+        });
+      }
+
+      // Moving average indicator overlay
+      if (currentIndicator !== 'none') {
+        const n = parseInt(currentIndicator.replace('ma',''));
+        const closes = ohlc.map(d => d.c);
+        const ma = sma(closes, n);
+        const maData = [];
+        for (let i = 0; i < ma.length; i++) if (ma[i] != null) maData.push({ x: ohlc[i].t, y: ma[i] });
+        datasets.push({ label:`MA${n}`, data:maData, type:'line', borderColor:'#ff7f0e', pointRadius:0, borderWidth:1.2 });
+      }
+
       ohlcChart.data.datasets = datasets;
       ohlcChart.update();
 
-      // clear liveBuffer and liveBucket so live overlay restarts
-      liveBuffer = [];
-      liveBucket = null;
+      // reset live buffers
+      liveLineBuffer = [];
+      currentBucket = null;
 
-      // connect websocket only for crypto (Binance WS provides trades)
-      if (cryptoSet.has(currentSymbol)) {
-        // map to symbol for binance subscription
-        connectBinanceTradeStream(currentSymbol);
+      // connect WebSocket for crypto only (BTCUSDT etc.)
+      if (currentSymbol.endsWith('USDT') || cryptoSet.has(currentSymbol)) {
+        connectBinance(currentSymbol);
       } else {
-        // no websocket for stocks; optionally could connect to a websocket provider
         if (binanceWS) try { binanceWS.close(); } catch(e){}
         binanceWS = null;
       }
 
       // initial indicators
-      renderOHLCAndIndicators(ohlc, currentSymbol);
+      recalcIndicators();
 
-      // update advisories
+      // update advisory
       updateAdvisories(currentSymbol, { ohlc });
 
-      $('chartUpdated').textContent = dataObj.last ? new Date(dataObj.last).toLocaleString() : 'Just now';
+      $('chartUpdated').textContent = ohlcData.last ? new Date(ohlcData.last).toLocaleString() : 'Just now';
       $('chartTitle').classList.remove('loading');
-      $('chartTitle').textContent = `${currentSymbol} (${currentRange}) - Live Data`;
-    } catch (err) {
-      console.error('loadSymbol error', err);
+      $('chartTitle').textContent = `${currentSymbol} (${currentRange}) - Live`;
+    } catch (e) {
+      console.error('loadSymbol error', e);
       $('chartTitle').classList.remove('loading');
       $('chartTitle').textContent = `${currentSymbol} (${currentRange})`;
       $('chartUpdated').textContent = 'Data updating';
-      $('advisories').innerHTML = `<div class="text-red-600"><strong>${currentSymbol}</strong>: ${err.message}</div><div class="mt-2 text-sm">Please try a different symbol or refresh.</div>`;
+      $('advisories').innerHTML = `<div class="meta">Error: ${e.message}</div>`;
     }
   }
 
-  // ---------------------
-  // Watchlist, Posts, Crypto Advice and News (UI fillers)
-  // ---------------------
-  function getWatch() {
-    try { return JSON.parse(localStorage.getItem('mp_watch') || '["AAPL","MSFT","GOOGL","TSLA","BTC"]'); } catch(e){ return ['AAPL','MSFT','GOOGL','TSLA','BTC']; }
-  }
-  function saveWatch(a) { localStorage.setItem('mp_watch', JSON.stringify(a)); }
-
-  function renderWatch() {
-    const list = getWatch();
-    const watchlistEl = $('watchlist');
-    if (list.length === 0) { watchlistEl.textContent = 'No symbols.'; return; }
-    watchlistEl.innerHTML = list.map(s => `
-      <div class="flex justify-between items-center py-2 border-b border-dashed border-slate-100">
-        <div><strong>${s}</strong></div>
-        <div class="flex gap-2">
-          <button data-sym="${s}" class="btn-muted viewBtn px-2 py-1 text-xs rounded">View</button>
-          <button data-sym="${s}" class="btn btn-xs removeBtn px-2 py-1 text-xs rounded">Remove</button>
-        </div>
-      </div>
-    `).join('');
-    document.querySelectorAll('.viewBtn').forEach(btn => { btn.addEventListener('click', () => loadSymbol(btn.dataset.sym)); });
-    document.querySelectorAll('.removeBtn').forEach(btn => { btn.addEventListener('click', () => {
-      const sym = btn.dataset.sym;
-      const arr = getWatch().filter(x=>x!==sym);
-      saveWatch(arr); renderWatch();
-    })});
-  }
-
-  async function loadPosts() {
-    const watchlist = getWatch().slice(0,9);
-    const postsArea = $('postsArea');
-    postsArea.innerHTML = '<div class="loading pulse">Updating market data...</div>';
-    try {
-      const posts = watchlist.map(symbol => {
-        const basePrices = { 'AAPL':180,'MSFT':330,'GOOGL':140,'TSLA':200,'BTC':50000,'ETH':3000,'AMZN':170,'NVDA':450,'META':320 };
-        const base = basePrices[symbol] || 100 + (Math.random()-0.5)*50;
-        const change = (Math.random()-0.5) * base * 0.03;
-        const currentPrice = base + change;
-        const changePercent = (change/base)*100;
-        const changeClass = change >= 0 ? 'text-emerald-600' : 'text-red-600';
-        const changeSymbol = change >= 0 ? '+' : '';
-        return `<div class="post bg-white rounded-lg p-3 border card-border">
-          <h4 class="text-sm font-semibold">${symbol}</h4>
-          <div class="meta">$${currentPrice.toFixed(2)}</div>
-          <div class="${changeClass} mt-1 text-sm">${changeSymbol}${change.toFixed(2)} (${changeSymbol}${Math.abs(changePercent).toFixed(2)}%)</div>
-          <div class="text-xs text-sky-600 mt-2">Live</div>
-        </div>`;
-      });
-      postsArea.innerHTML = posts.join('');
-    } catch (e) {
-      postsArea.innerHTML = '<div class="error text-sm">Market data updating...</div>';
-    }
-  }
-
-  async function loadCryptoAdvice() {
-    const el = $('cryptoAdvice');
-    el.innerHTML = '<div class="loading pulse">Loading...</div>';
-    try {
-      // quick attempt: Binance ticker 24hr
-      const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-      const json = await res.json();
-      const top = ['BTCUSDT','ETHUSDT','BNBUSDT','ADAUSDT','SOLUSDT'];
-      const filtered = json.filter(it => top.includes(it.symbol)).map(it => ({
-        symbol: it.symbol.replace('USDT',''),
-        price: parseFloat(it.lastPrice),
-        pct: parseFloat(it.priceChangePercent)
-      }));
-      el.innerHTML = filtered.map(c => `<div class="py-2 border-b"><div class="flex justify-between"><strong>${c.symbol}</strong><span>$${formatCurrency(c.price)}</span></div><div class="meta">${c.pct.toFixed(2)}% (24h)</div></div>`).join('');
-    } catch (e) {
-      el.innerHTML = '<div class="meta">Crypto advice currently offline.</div>';
-    }
-  }
-
-  async function loadNews() {
-    const newsGrid = $('newsGrid');
-    const fallback = [
-      { title:'Global Markets Show Resilience Amid Economic Shifts', img:'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop' },
-      { title:'Tech Stocks Lead Rally on AI Hopes', img:'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop' },
-      { title:'Cryptocurrency Volatility Returns', img:'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=600&h=400&fit=crop' }
-    ];
-    newsGrid.innerHTML = fallback.map(n => `<div class="bg-white rounded-lg overflow-hidden border card-border p-2"><img src="${n.img}" class="w-full h-24 object-cover"/><div class="p-2"><strong class="text-sm">${n.title}</strong></div></div>`).join('');
-  }
-
-  // ---------------------
-  // Advisories: simple signal using MA cross
-  // ---------------------
+  // -------------------------
+  // Advisory logic: simple MA10/MA50 cross
+  // -------------------------
   function computeSignalsFromOHLC(ohlc) {
-    if (!ohlc || ohlc.length < 50) return { recommendation:'Hold', reason:'Insufficient data for analysis' };
-    const closes = ohlc.map(d=>d.c);
-    const ma10 = sma(closes, 10).filter(v=>v!=null);
-    const ma50 = sma(closes, 50).filter(v=>v!=null);
-    const last10 = ma10[ma10.length-1];
-    const last50 = ma50[ma50.length-1];
-    const currentPrice = closes[closes.length-1];
-    let signal = { recommendation: 'Hold', reason: 'No clear trend' };
-    if (last10 && last50 && currentPrice) {
-      if (last10 > last50 && currentPrice > last10) signal = { recommendation:'Buy', reason:'Bullish: price > MA10 and MA10 > MA50' };
-      else if (last10 < last50 && currentPrice < last10) signal = { recommendation:'Sell', reason:'Bearish: price < MA10 and MA10 < MA50' };
+    if (!ohlc || ohlc.length < 50) return { recommendation:'Hold', reason:'Insufficient data' };
+    const closes = ohlc.map(d => d.c);
+    const ma10 = sma(closes, 10);
+    const ma50 = sma(closes, 50);
+    const ma10v = ma10[ma10.length-1], ma50v = ma50[ma50.length-1];
+    const price = closes[closes.length-1];
+    let rec = { recommendation:'Hold', reason:'No clear trend' };
+    if (ma10v && ma50v) {
+      if (ma10v > ma50v && price > ma10v) rec = { recommendation:'Buy', reason:'Bullish: price > MA10 and MA10 > MA50' };
+      else if (ma10v < ma50v && price < ma10v) rec = { recommendation:'Sell', reason:'Bearish: price < MA10 and MA10 < MA50' };
     }
-    const momentum = ((currentPrice - closes[Math.max(0, closes.length-5)]) / closes[Math.max(0, closes.length-5)])*100;
-    if (Math.abs(momentum) > 3) signal.momentum = `${momentum.toFixed(2)}% over last 5 periods`;
-    return signal;
+    const momentum = ((price - closes[Math.max(0, closes.length-5)]) / closes[Math.max(0, closes.length-5)])*100;
+    if (Math.abs(momentum) > 3) rec.momentum = `${momentum.toFixed(2)}% (5 bars)`;
+    return rec;
   }
-
   function updateAdvisories(symbol, data) {
-    const el = $('advisories');
     try {
       const sig = computeSignalsFromOHLC(data.ohlc);
-      el.innerHTML = `<strong>${symbol}</strong>
+      $('advisories').innerHTML = `<strong>${symbol}</strong>
         <div class="mt-2">Recommendation: <strong>${sig.recommendation}</strong></div>
-        <div class="meta mt-2">${sig.reason}</div>
-        ${sig.momentum ? `<div class="meta mt-2">${sig.momentum}</div>` : ''}
-        <div class="mt-3 small text-sky-600">Live Data Analysis</div>`;
+        <div class="meta small mt-1">${sig.reason}</div>
+        ${sig.momentum ? `<div class="meta small mt-1">${sig.momentum}</div>` : ''}`;
     } catch (e) {
-      el.innerHTML = `<div class="meta">Analysis unavailable</div>`;
+      $('advisories').innerHTML = `<div class="meta">Analysis unavailable</div>`;
     }
   }
 
-  // ---------------------
-  // UI wiring & initialization
-  // ---------------------
+  // -------------------------
+  // Wire UI controls and init
+  // -------------------------
   document.addEventListener('DOMContentLoaded', () => {
-    // time ranges
+    // time ranges UI
     const ranges = ['1D','1W','1M','3M','1Y'];
-    const timeRangeDiv = $('timeRange');
-    timeRangeDiv.innerHTML = ranges.map(r => `<button class="px-2 py-1 rounded text-xs ${r==='1D'?'bg-sky-600 text-white':'bg-slate-100'}" data-range="${r}">${r}</button>`).join('');
-    timeRangeDiv.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        timeRangeDiv.querySelector('.bg-sky-600')?.classList.remove('bg-sky-600','text-white');
-        btn.classList.add('bg-sky-600','text-white');
-        if (currentSymbol) loadSymbol(currentSymbol, btn.dataset.range);
-      });
-    });
+    $('timeRange').innerHTML = ranges.map(r=>`<button class="btn-muted small" data-range="${r}">${r}</button>`).join('');
+    document.querySelectorAll('#timeRange button').forEach(b=>b.addEventListener('click', (e)=>{ document.querySelectorAll('#timeRange button').forEach(x=>x.classList.remove('bg-sky-600','text-white')); b.classList.add('bg-sky-600','text-white'); const r=b.dataset.range; loadSymbol(currentSymbol, r); }));
 
     // chart types
-    const chartTypes = [{ type:'candlestick', label:'Candlestick' },{ type:'line', label:'Line' }];
-    const chartTypeDiv = $('chartType');
-    chartTypeDiv.innerHTML = chartTypes.map(c=>`<button class="px-2 py-1 rounded text-xs ${c.type==='candlestick'?'bg-slate-200':'bg-slate-100'}" data-type="${c.type}">${c.label}</button>`).join('');
-    chartTypeDiv.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentChartType = btn.dataset.type;
-        chartTypeDiv.querySelector('.bg-slate-200')?.classList.remove('bg-slate-200');
-        btn.classList.add('bg-slate-200');
-        // re-render chart for current symbol
-        loadSymbol(currentSymbol, currentRange);
-      });
+    const chartTypes = [{type:'candlestick', label:'Candlestick'},{type:'line',label:'Line'}];
+    $('chartType').innerHTML = chartTypes.map(c=>`<button class="btn-muted small" data-type="${c.type}">${c.label}</button>`).join('');
+    document.querySelectorAll('#chartType button').forEach(b=>b.addEventListener('click', (e)=>{ currentChartType=b.dataset.type; createCharts(); loadSymbol(currentSymbol, currentRange); }));
+
+    // indicator select
+    $('indicatorSelect').addEventListener('change', (e)=>{ currentIndicator=e.target.value; loadSymbol(currentSymbol,currentRange); });
+
+    // zoom slider binds to applyZoomFromSlider
+    $('zoomSlider').addEventListener('input', () => {
+      applyZoomFromSlider();
     });
 
-    $('indicatorSelect').addEventListener('change', (e) => {
-      currentIndicator = e.target.value;
-      // re-render indicator overlay
-      loadSymbol(currentSymbol, currentRange);
-    });
-
-    $('loadBtn').addEventListener('click', () => {
-      const sym = $('globalSearch').value.trim();
-      if (!sym) { alert('Please enter a symbol'); return; }
+    // load button
+    $('loadBtn').addEventListener('click', ()=> {
+      const s = $('globalSearch').value.trim();
+      if (!s) { alert('Please enter a symbol'); return; }
+      // add to watchlist
       const watch = getWatch();
-      if (!watch.includes(sym.toUpperCase())) { watch.unshift(sym.toUpperCase()); saveWatch(watch); renderWatch(); }
+      if (!watch.includes(s.toUpperCase())) { watch.unshift(s.toUpperCase()); saveWatch(watch); renderWatch(); }
       $('globalSearch').value = '';
-      loadSymbol(sym.toUpperCase());
+      loadSymbol(s.toUpperCase());
     });
 
-    $('globalSearch').addEventListener('keypress', (e) => { if (e.key === 'Enter') $('loadBtn').click(); });
-
-    $('sendBtn').addEventListener('click', () => {
-      const name = $('name').value.trim(), email = $('email').value.trim(), message = $('message').value.trim();
-      if (!name || !email || !message) { $('sendStatus').textContent = 'Please fill all fields.'; return; }
-      const subject = `Contact from ${name} - JDGlobal Markets`;
-      const body = `Message: ${message}\n\nFrom: ${name} <${email}>`;
-      window.location.href = `mailto:wambuamwanza6@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      $('sendStatus').textContent = 'Opening email client...';
-    });
-
-    // initial render
+    // initial UI items
     renderWatch();
+    loadPosts();
     loadCryptoAdvice();
     loadNews();
-    loadPosts();
 
-    // default symbol (first in watch)
-    const first = getWatch()[0] || 'BTC';
-    loadSymbol(first, '1D');
+    // Initialize charts and load default
+    createCharts();
+    loadSymbol(currentSymbol, '1D');
 
-    // refresh some panels periodically
-    setInterval(() => { loadCryptoAdvice(); loadPosts(); if (Date.now() - (window._lastNews||0) > NEWS_UPDATE_INTERVAL) { loadNews(); window._lastNews = Date.now(); } }, 60000);
+    // periodic refresh for panels
+    setInterval(()=>{ loadCryptoAdvice(); loadPosts(); loadNews(); }, 60000);
   });
+
+  // utility: apply zoom slider mapping to x min/max
+  function applyZoomFromSlider() {
+    const slider = $('zoomSlider');
+    if (!ohlcChart || !slider) return;
+    const val = parseInt(slider.value, 10);
+    // pick dataset for time domain (prefer candlestick)
+    const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick') || ohlcChart.data.datasets[0];
+    if (!ds || !ds.data || ds.data.length === 0) return;
+    const total = ds.data.length;
+    const visible = Math.max(10, Math.round(total * (val/100)));
+    const lastIdx = total - 1;
+    const firstIdx = Math.max(0, lastIdx - visible + 1);
+    const minT = ds.data[firstIdx].x;
+    const maxT = ds.data[lastIdx].x;
+    ohlcChart.options.scales.x.min = minT;
+    ohlcChart.options.scales.x.max = maxT;
+    try { ohlcChart.update(); } catch(e) {}
+  }
   </script>
 </body>
 </html>
