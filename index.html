@@ -11,138 +11,170 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
 
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Custom styles (kept minimal because Tailwind handles the bulk) -->
   <style>
-    html, body { all: unset; display: block; height: 100%; }
-    * { box-sizing: border-box; }
-    body { font-family: Inter, Segoe UI, Roboto, Arial, sans-serif; background: #f6f8fb; margin: 0; padding: 18px; color: #0b2240; }
-    #app { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 18px; border: 1px solid #e6eef6; box-shadow: 0 12px 40px rgba(13, 30, 50, 0.06); }
-    .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid #e6eef6; }
-    .brand { display: flex; gap: 12px; align-items: center; }
-    .logo { width: 56px; height: 56px; border-radius: 10px; background: linear-gradient(135deg, #e6f2ff, #fff); display: flex; align-items: center; justify-content: center; font-weight: 800; color: #0b76d1; }
-    .title { font-size: 18px; font-weight: 700; }
-    .subtitle { font-size: 13px; color: #6b7b8c; }
-    .controls { display: flex; gap: 8px; align-items: center; }
-    .controls input, .controls select { padding: 8px; border-radius: 8px; border: 1px solid #dcebf7; font-size: 14px; }
-    .controls button { padding: 8px 12px; border-radius: 8px; border: none; background: #0b76d1; color: #fff; cursor: pointer; font-size: 14px; }
-    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; margin-top: 16px; }
-    .left { display: flex; flex-direction: column; gap: 12px; }
-    .card { background: #fff; border: 1px solid #eef6fb; border-radius: 10px; padding: 12px; }
-    .chartCard { display: flex; flex-direction: column; }
-    .chartWrap { height: 420px; position: relative; }
-    .chartToolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-    .timeRange { display: flex; gap: 4px; }
-    .timeRange button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
-    .timeRange button.active { background: #0b76d1; color: #fff; }
-    .chartType { display: flex; gap: 4px; }
-    .chartType button { padding: 4px 8px; font-size: 12px; background: #f1f6fb; border: 1px solid #dcebf7; border-radius: 4px; cursor: pointer; }
-    .chartType button.active { background: #0b76d1; color: #fff; }
-    .indicatorSelect { padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #dcebf7; }
-    .newsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-    .newsCard { background: #fff; border: 1px solid #eef6fb; border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: transform 0.2s; }
-    .newsCard:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-    .newsCard img { width: 100%; height: 140px; object-fit: cover; }
-    .newsCard .body { padding: 10px; }
-    .newsCard h5 { margin: 0 0 6px 0; font-size: 15px; }
-    .newsCard .meta { font-size: 12px; color: #6b7b8c; }
-    .postsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-    .post { padding: 12px; border-radius: 8px; background: linear-gradient(180deg, #fff, #fbfdff); border: 1px solid #eef6fb; display: flex; flex-direction: column; justify-content: space-between; }
-    .post h4 { margin: 0 0 6px 0; font-size: 16px; }
-    .post .meta { font-size: 14px; color: #0b2240; }
-    .post .change { font-size: 14px; color: #d32f2f; }
-    .post .change.green { color: #00cc00; }
-    footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid #eef6fb; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
-    .contact input, .contact textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #dcebf7; margin-top: 8px; }
-    .contact button { margin-top: 8px; padding: 10px 12px; border-radius: 8px; border: none; background: #0b76d1; color: #fff; cursor: pointer; }
-    .advice { background: linear-gradient(180deg, #fff, #fbfdff); padding: 10px; border-radius: 8px; border: 1px solid #eef6fb; }
-    .error { color: #d32f2f; font-style: italic; }
-    .loading { opacity: 0.6; }
-    .success { color: #00cc00; }
+    /* Preserve the look & feel intent from original while letting Tailwind do heavy lifting */
+    html, body { height: 100%; }
+    /* Layout main grid defaults (desktop) */
+    .grid-main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 18px;
+    }
+
+    /* Mobile behavior: two columns on narrow screens,
+       Graph (section) on the left, Watchlist (aside.left) on the right.
+       We also make sure it stacks nicely when extremely narrow. */
+    @media (max-width: 700px) {
+      .grid-main {
+        grid-template-columns: 1fr 320px; /* left column = graph, right column = watchlist */
+        gap: 12px;
+      }
+      aside.left { order: 2; }   /* Watchlist on right column */
+      section { order: 1; }      /* Graph on left column */
+    }
+
+    /* Very small phones: if 320px wide is too large, allow columns to wrap */
+    @media (max-width: 420px) {
+      .grid-main {
+        grid-template-columns: 1fr; /* single column to avoid overflow on tiny screens */
+      }
+      aside.left { order: 2; }
+      section { order: 1; }
+    }
+
+    /* Slight helper for chart canvas fallback text */
+    canvas#ohlcChart { width: 100% !important; height: 420px; }
+
+    /* Nice card border color consistent with original */
+    .card-border { border: 1px solid #e6eef6; }
+
+    /* small helpers */
+    .meta { color: #6b7b8c; }
+    .loading { opacity: 0.7; }
     .pulse { animation: pulse 1.5s infinite; }
     @keyframes pulse {
       0% { opacity: 1; }
       50% { opacity: 0.5; }
       100% { opacity: 1; }
     }
-    @media (max-width: 1100px) { .newsGrid, .postsGrid { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
-    @media (max-width: 700px) { .newsGrid, .postsGrid { grid-template-columns: 1fr; } .chartToolbar { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
-<body>
-  <div id="app">
-    <div class="header">
-      <div class="brand">
-        <div class="logo">JDG</div>
+<body class="bg-slate-50 text-slate-900 antialiased">
+
+  <!-- Container -->
+  <div id="app" class="max-w-6xl mx-auto my-5 bg-white rounded-2xl p-5 card-border shadow-xl">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-sky-50 to-white flex items-center justify-center text-sky-600 font-extrabold text-lg shadow-sm">
+          JDG
+        </div>
         <div>
-          <div class="title">JDGlobal Markets</div>
-          <div class="subtitle">Real-time candlesticks, indicators, trade advisories & market news</div>
+          <div class="text-lg font-semibold">JDGlobal Markets</div>
+          <div class="text-sm meta">Real-time candlesticks, indicators, trade advisories & market news</div>
         </div>
       </div>
-      <div class="controls">
-        <input id="globalSearch" placeholder="Symbol e.g. AAPL, TSLA, BTC, EURUSD">
-        <button id="loadBtn">Load</button>
+
+      <div class="flex items-center gap-3">
+        <input id="globalSearch" placeholder="Symbol e.g. AAPL, TSLA, BTC, EURUSD"
+               class="px-3 py-2 rounded-lg border card-border text-sm focus:outline-none focus:ring-2 focus:ring-sky-200" />
+        <button id="loadBtn" class="px-3 py-2 rounded-lg bg-sky-600 text-white text-sm hover:bg-sky-700">Load</button>
       </div>
     </div>
 
-    <main class="grid">
-      <aside class="left">
-        <div class="card">
-          <h4>Watchlist</h4>
-          <div id="watchlist">Loading…</div>
-          <div style="margin-top:8px"><small class="meta">Tip: Add any global ticker (US/EU/Asia). For forex use EURUSD, for crypto use BTC, ETH etc.</small></div>
+    <!-- Main grid: left = aside (watchlist), right = section (charts) on desktop.
+         On mobile we switch columns so section is left column and aside is right column (see media queries). -->
+    <main class="grid-main mt-4">
+      <!-- Aside / Left column (watchlist & widgets) -->
+      <aside class="left flex flex-col gap-4">
+        <div class="bg-white rounded-xl p-4 card-border shadow-sm">
+          <h4 class="text-base font-semibold">Watchlist</h4>
+          <div id="watchlist" class="mt-2 text-sm">Loading…</div>
+          <div class="mt-2"><small class="meta">Tip: Add any global ticker (US/EU/Asia). For forex use EURUSD, for crypto use BTC, ETH etc.</small></div>
         </div>
-        <div class="card">
-          <h4>Trade Advisories</h4>
-          <div id="advisories" class="advice">Loading advisories…</div>
+
+        <div class="bg-white rounded-xl p-4 card-border shadow-sm">
+          <h4 class="text-base font-semibold">Trade Advisories</h4>
+          <div id="advisories" class="advice mt-2 text-sm">Loading advisories…</div>
         </div>
-        <div class="card">
-          <h4>Crypto Suggestions</h4>
-          <div id="cryptoAdvice" class="advice">Loading crypto suggestions…</div>
+
+        <div class="bg-white rounded-xl p-4 card-border shadow-sm">
+          <h4 class="text-base font-semibold">Crypto Suggestions</h4>
+          <div id="cryptoAdvice" class="advice mt-2 text-sm">Loading crypto suggestions…</div>
         </div>
       </aside>
-      <section>
-        <div class="card chartCard">
-          <div class="chartToolbar">
-            <div><strong id="chartTitle">Select a symbol</strong></div>
-            <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
-            <div class="timeRange" id="timeRange"></div>
-            <div class="chartType" id="chartType"></div>
-            <select id="indicatorSelect" class="indicatorSelect">
+
+      <!-- Section / Right column (charts, news, posts) -->
+      <section class="flex flex-col gap-4">
+        <div class="bg-white rounded-xl p-4 card-border shadow-sm chartCard">
+          <div class="flex items-start gap-4 flex-wrap">
+            <div>
+              <strong id="chartTitle" class="text-base">Select a symbol</strong>
+              <div class="text-xs meta"> &nbsp;</div>
+            </div>
+
+            <div class="ml-auto text-sm meta">Updated: <span id="chartUpdated">—</span></div>
+          </div>
+
+          <!-- toolbar -->
+          <div class="flex items-center gap-3 mt-3 flex-wrap">
+            <div id="timeRange" class="flex gap-2"></div>
+            <div id="chartType" class="flex gap-2"></div>
+
+            <select id="indicatorSelect" class="ml-2 px-3 py-1 border rounded-lg card-border text-sm">
               <option value="none">MA: None</option>
               <option value="ma10">MA10</option>
               <option value="ma20">MA20</option>
               <option value="ma50">MA50</option>
             </select>
           </div>
-          <div class="chartWrap"><canvas id="ohlcChart"></canvas></div>
-          <div style="margin-top:12px">
-            <strong>Market News</strong>
-            <div class="newsGrid" id="newsGrid">Loading news…</div>
+
+          <!-- chart canvas -->
+          <div class="relative mt-3 rounded-lg overflow-hidden bg-slate-50 p-3">
+            <canvas id="ohlcChart" class="w-full" role="img" aria-label="OHLC candlestick chart"></canvas>
+          </div>
+
+          <!-- Market news -->
+          <div class="mt-4">
+            <strong class="text-sm">Market News</strong>
+            <div class="grid grid-cols-3 gap-3 mt-3" id="newsGrid">
+              Loading news…
+            </div>
           </div>
         </div>
-        <div class="card" style="margin-top:12px">
-          <h4 style="margin-top:0">Market Watch Posts</h4>
-          <div class="postsGrid" id="postsArea">Loading posts…</div>
+
+        <div class="bg-white rounded-xl p-4 card-border shadow-sm">
+          <h4 class="text-base font-semibold">Market Watch Posts</h4>
+          <div class="grid grid-cols-3 gap-3 mt-3" id="postsArea">Loading posts…</div>
         </div>
       </section>
     </main>
 
-    <footer>
+    <!-- Footer -->
+    <footer class="mt-5 pt-4 border-t border-slate-100 flex flex-col md:flex-row items-start justify-between gap-4">
       <div>
-        <div style="font-weight:700">Market Pulse</div>
+        <div class="font-semibold">Market Pulse</div>
         <div class="meta">Real Markets Data and Analysis Dashboard by JDG Team</div>
       </div>
-      <div class="contact card" style="width:360px">
+
+      <div class="contact bg-white rounded-xl p-4 card-border shadow-sm w-full md:w-[360px]">
         <strong>Contact</strong>
-        <div class="meta">Messages will be prepared for: <strong>wambuamwanza6@gmail.com</strong></div>
-        <input id="name" placeholder="Your name" />
-        <input id="email" placeholder="Your email" />
-        <textarea id="message" rows="4" placeholder="Your message"></textarea>
-        <button id="sendBtn">Send</button>
-        <div id="sendStatus" class="meta" style="margin-top:8px"></div>
+        <div class="meta text-sm mt-1">Messages will be prepared for: <strong>wambuamwanza6@gmail.com</strong></div>
+        <input id="name" placeholder="Your name" class="mt-3 px-3 py-2 w-full rounded-lg border card-border text-sm" />
+        <input id="email" placeholder="Your email" class="mt-2 px-3 py-2 w-full rounded-lg border card-border text-sm" />
+        <textarea id="message" rows="4" placeholder="Your message" class="mt-2 px-3 py-2 w-full rounded-lg border card-border text-sm"></textarea>
+        <button id="sendBtn" class="mt-3 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm hover:bg-sky-700">Send</button>
+        <div id="sendStatus" class="meta mt-2 text-sm"></div>
       </div>
     </footer>
   </div>
 
+  <!-- === JavaScript: kept intact from your original logic, minor adjustments for Tailwind integration only === -->
   <script>
     // CONFIG - Faster APIs with better fallbacks
     const ALPHA_VANTAGE_API_KEY = 'INZ7GV3B33PXV2QM';
@@ -179,19 +211,19 @@
     function renderWatch() {
       const list = getWatch();
       const watchlistEl = $('watchlist');
-      
+
       if (list.length === 0) {
         watchlistEl.textContent = 'No symbols.';
         return;
       }
-      
+
       watchlistEl.innerHTML = list.map(s => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #f1f6fb">
+        <div class="flex justify-between items-center py-2 border-b border-dashed border-slate-100">
           <div><strong>${s}</strong></div>
-          <button data-sym="${s}" class="viewBtn" style="padding:4px 8px;font-size:12px;background:#0b76d1;color:#fff;border:none;border-radius:4px;cursor:pointer">View</button>
+          <button data-sym="${s}" class="viewBtn px-2 py-1 text-xs rounded bg-sky-600 text-white">View</button>
         </div>
       `).join('');
-      
+
       document.querySelectorAll('.viewBtn').forEach(btn => {
         btn.addEventListener('click', () => loadSymbol(btn.dataset.sym));
       });
@@ -201,7 +233,7 @@
     async function fetchCryptoMarketsFast() {
       const cacheKey = 'crypto_markets_fast';
       const cached = dataCache.get(cacheKey);
-      
+
       if (cached && Date.now() - cached.timestamp < 30000) { // 30 second cache for crypto
         return cached.data;
       }
@@ -209,10 +241,10 @@
       try {
         // Try multiple crypto APIs in sequence with fallbacks
         const cryptoData = await tryCryptoApis();
-        
+
         dataCache.set(cacheKey, { data: cryptoData, timestamp: Date.now() });
         return cryptoData;
-        
+
       } catch (error) {
         console.error('All crypto APIs failed:', error);
         // Return realistic mock data that updates
@@ -228,7 +260,7 @@
           const data = await response.json();
           const topCryptos = ['BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'DOT', 'DOGE', 'XRP', 'LTC', 'LINK'];
           const filtered = data.filter(item => topCryptos.includes(item.symbol.replace('USDT', '')));
-          
+
           return filtered.map(item => ({
             symbol: item.symbol.replace('USDT', ''),
             current_price: parseFloat(item.lastPrice),
@@ -287,12 +319,12 @@
         const changePercent = (Math.random() - 0.5) * 15; // -7.5% to +7.5%
         const currentPrice = basePrice * (1 + changePercent / 100);
         const priceChange = currentPrice - basePrice;
-        
+
         return {
           symbol: symbol.toLowerCase(),
-            current_price: currentPrice,
-            price_change_percentage_24h: changePercent,
-            price_change_24h: priceChange
+          current_price: currentPrice,
+          price_change_percentage_24h: changePercent,
+          price_change_24h: priceChange
         };
       });
     }
@@ -305,9 +337,9 @@
       }
 
       lastCryptoUpdate = now;
-      
+
       // Show loading state immediately
-      $('cryptoAdvice').innerHTML = '<div class="loading pulse">Loading live crypto data...</div>';
+      $('cryptoAdvice').innerHTML = '<div class="loading pulse text-sm">Loading live crypto data...</div>';
 
       try {
         const cryptoData = await fetchCryptoMarketsFast();
@@ -322,7 +354,7 @@
 
     function renderCryptoAdvice(cryptoData) {
       const cryptoAdviceEl = $('cryptoAdvice');
-      
+
       const nodes = cryptoData.map(crypto => {
         const symbol = (crypto.symbol || 'CRYPTO').toUpperCase();
         const price = crypto.current_price?.toLocaleString('en-US', {
@@ -331,15 +363,15 @@
           minimumFractionDigits: crypto.current_price < 1 ? 4 : 2,
           maximumFractionDigits: crypto.current_price < 1 ? 4 : 2
         }) || '$0.00';
-        
+
         const change = crypto.price_change_percentage_24h || 0;
         const changeFormatted = Math.abs(change).toFixed(2);
         const changeColor = change >= 0 ? '#00cc00' : '#d32f2f';
         const changeSymbol = change >= 0 ? '+' : '';
-        
+
         let recommendation = 'Hold';
         let recommendationColor = '#6b7b8c';
-        
+
         if (change > 8) {
           recommendation = 'Consider Taking Profits';
           recommendationColor = '#d32f2f';
@@ -355,15 +387,15 @@
         }
 
         return `
-          <div style="padding:8px 0;border-bottom:1px dashed #f1f6fb">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="py-2 border-b border-slate-100">
+            <div class="flex justify-between items-center">
               <strong>${symbol}</strong>
-              <span style="font-weight:600">${price}</span>
+              <span class="font-semibold">${price}</span>
             </div>
             <div class="meta" style="color:${changeColor};font-weight:500">
               ${changeSymbol}${changeFormatted}% (24h)
             </div>
-            <div style="margin-top:4px;font-size:12px;color:${recommendationColor}">
+            <div class="mt-1 text-xs" style="color:${recommendationColor}">
               <em>${recommendation}</em>
             </div>
           </div>
@@ -371,22 +403,19 @@
       });
 
       cryptoAdviceEl.innerHTML = `
-        <div style="margin-bottom:8px;font-size:12px;color:#0b76d1;text-align:right">
-          Updated: ${new Date().toLocaleTimeString()}
-        </div>
+        <div class="text-xs text-sky-600 text-right mb-2">Updated: ${new Date().toLocaleTimeString()}</div>
         ${nodes.join('')}
-        <div style="margin-top:8px;text-align:center">
-          <button onclick="loadCryptoAdvice()" style="padding:4px 8px;font-size:11px;background:#0b76d1;color:#fff;border:none;border-radius:4px;cursor:pointer">Refresh Crypto</button>
+        <div class="mt-3 text-center">
+          <button onclick="loadCryptoAdvice()" class="px-3 py-1 text-xs rounded bg-sky-600 text-white">Refresh Crypto</button>
         </div>
       `;
     }
 
-    // [Keep all the existing functions from previous code: fetchStockData, fetchCryptoData, renderChart, etc.]
     // FASTER DATA FETCHING with better error handling
     async function fetchWithTimeout(url, timeout = 8000) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
+
       try {
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -400,82 +429,70 @@
     async function fetchStockData(symbol, range = '1D') {
       const cacheKey = `stock_${symbol}_${range}`;
       const cached = dataCache.get(cacheKey);
-      
+
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
         return cached.data;
       }
 
       try {
         // Try Yahoo Finance first (faster and more reliable)
-        const ranges = { 
-          '1D': '1d', '1W': '5d', '1M': '1mo', 
-          '3M': '3mo', '1Y': '1y'
-        };
-        
+        const ranges = { '1D': '1d', '1W': '5d', '1M': '1mo', '3M': '3mo', '1Y': '1y' };
+
         const yahooRange = ranges[range] || '1d';
         const interval = range === '1D' ? '5m' : '1d';
-        
+
         const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${yahooRange}&interval=${interval}`;
         const proxyUrl = 'https://api.allorigins.win/raw?url=';
-        
+
         const response = await fetchWithTimeout(proxyUrl + encodeURIComponent(yahooUrl), 5000);
         const data = await response.json();
-        
+
         if (!data.chart?.result?.[0]) {
           throw new Error('No chart data from Yahoo');
         }
-        
+
         const result = data.chart.result[0];
         const quotes = result.indicators.quote[0];
         const timestamps = result.timestamp;
-        
+
         if (!timestamps || timestamps.length === 0) {
           throw new Error('No timestamp data');
         }
-        
-        const ohlc = timestamps.map((t, i) => ({
-          t: t * 1000,
-          o: quotes.open[i] || quotes.close[i] || 0,
-          h: quotes.high[i] || quotes.close[i] || 0,
-          l: quotes.low[i] || quotes.close[i] || 0,
-          c: quotes.close[i] || 0
-        })).filter(d => d.c > 0 && d.o > 0);
-        
-        const resultData = { 
-          ohlc, 
-          last: timestamps.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : null 
-        };
-        
+
+        const ohlc = timestamps.map((t, i) => ({ t: t * 1000, o: quotes.open[i] || quotes.close[i] || 0, h: quotes.high[i] || quotes.close[i] || 0, l: quotes.low[i] || quotes.close[i] || 0, c: quotes.close[i] || 0 })).filter(d => d.c > 0 && d.o > 0);
+
+        const resultData = { ohlc, last: timestamps.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : null };
+
         dataCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         return resultData;
-        
+
       } catch (error) {
         console.error(`Yahoo Finance error for ${symbol}:`, error);
-        
+
         // Fallback to Alpha Vantage
         try {
           const interval = range === '1D' ? '5min' : 'daily';
           const functionName = range === '1D' ? 'TIME_SERIES_INTRADAY' : 'TIME_SERIES_DAILY';
-          
+
           const url = `https://www.alphavantage.co/query?function=${functionName}&symbol=${symbol}&interval=${interval}&apikey=${ALPHA_VANTAGE_API_KEY}&outputsize=compact`;
-          
+
           const response = await fetchWithTimeout(url, 5000);
           const data = await response.json();
-          
+
           let timeSeries;
           if (range === '1D') {
             timeSeries = data['Time Series (5min)'];
           } else {
             timeSeries = data['Time Series (Daily)'];
           }
-          
+
           if (!timeSeries) {
             throw new Error('No time series data available');
           }
-          
+
           const ohlc = [];
           const dates = Object.keys(timeSeries).sort();
-          
+
           for (const date of dates) {
             const entry = timeSeries[date];
             ohlc.push({
@@ -486,15 +503,12 @@
               c: parseFloat(entry['4. close'])
             });
           }
-          
-          const resultData = { 
-            ohlc: ohlc.reverse(),
-            last: dates[dates.length - 1]
-          };
-          
+
+          const resultData = { ohlc: ohlc.reverse(), last: dates[dates.length - 1] };
+
           dataCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
           return resultData;
-          
+
         } catch (avError) {
           console.error(`Alpha Vantage error for ${symbol}:`, avError);
           throw new Error(`Unable to fetch data for ${symbol}. Please try another symbol.`);
@@ -505,43 +519,30 @@
     async function fetchCryptoData(symbol) {
       const cacheKey = `crypto_${symbol}`;
       const cached = dataCache.get(cacheKey);
-      
+
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
         return cached.data;
       }
 
       try {
-        const coinMap = {
-          'BTC': 'bitcoin', 'ETH': 'ethereum', 'ADA': 'cardano', 'SOL': 'solana',
-          'DOT': 'polkadot', 'DOGE': 'dogecoin', 'XRP': 'ripple', 'LTC': 'litecoin',
-          'BNB': 'binancecoin', 'LINK': 'chainlink'
-        };
-        
+        const coinMap = { 'BTC': 'bitcoin', 'ETH': 'ethereum', 'ADA': 'cardano', 'SOL': 'solana', 'DOT': 'polkadot', 'DOGE': 'dogecoin', 'XRP': 'ripple', 'LTC': 'litecoin', 'BNB': 'binancecoin', 'LINK': 'chainlink' };
+
         const coinId = coinMap[symbol] || symbol.toLowerCase();
-        
+
         const response = await fetchWithTimeout(`https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=30`, 5000);
         const data = await response.json();
-        
+
         if (!data || data.length === 0) {
           throw new Error('No crypto data available');
         }
-        
-        const ohlc = data.map(item => ({
-          t: item[0],
-          o: item[1],
-          h: item[2],
-          l: item[3],
-          c: item[4]
-        }));
-        
-        const resultData = {
-          ohlc,
-          last: new Date().toISOString()
-        };
-        
+
+        const ohlc = data.map(item => ({ t: item[0], o: item[1], h: item[2], l: item[3], c: item[4] }));
+
+        const resultData = { ohlc, last: new Date().toISOString() };
+
         dataCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         return resultData;
-        
+
       } catch (error) {
         console.error(`Crypto data error for ${symbol}:`, error);
         throw new Error(`Unable to fetch crypto data for ${symbol}`);
@@ -552,7 +553,7 @@
     function renderChart(ohlc, label) {
       const canvas = $('ohlcChart');
       const ctx = canvas.getContext('2d');
-      
+
       if (ohlcChart) {
         ohlcChart.destroy();
       }
@@ -566,20 +567,16 @@
       }
 
       const data = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
-      
+
       let datasets = [];
-      
+
       // Main price dataset
       if (currentChartType === 'candlestick') {
         datasets.push({
           label: label,
           data: data,
           type: 'candlestick',
-          color: {
-            up: '#00cc00',
-            down: '#ff3333',
-            unchanged: '#999999'
-          }
+          color: { up: '#00cc00', down: '#ff3333', unchanged: '#999999' }
         });
       } else {
         datasets.push({
@@ -600,9 +597,9 @@
         const n = parseInt(currentIndicator.replace('ma', ''));
         const closes = ohlc.map(d => d.c);
         const ma = simpleMovingAverage(closes, n);
-        
+
         const maData = ma.map((v, i) => ({ x: ohlc[i].t, y: v })).filter(d => d.y !== null);
-        
+
         if (maData.length > 0) {
           datasets.push({
             label: `MA${n}`,
@@ -624,23 +621,13 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          animation: {
-            duration: 1000, // Smooth animations
-            easing: 'easeOutQuart'
-          },
+          animation: { duration: 1000, easing: 'easeOutQuart' },
           plugins: {
-            legend: {
-              display: true,
-              position: 'top',
-              labels: {
-                usePointStyle: true,
-                padding: 15
-              }
-            },
+            legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 12 } },
             tooltip: {
               mode: 'index',
               intersect: false,
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              backgroundColor: 'rgba(0,0,0,0.8)',
               titleFont: { size: 12 },
               bodyFont: { size: 12 },
               padding: 10
@@ -649,46 +636,23 @@
           scales: {
             x: {
               type: 'time',
-              time: {
-                unit: currentRange === '1D' ? 'hour' : 'day',
-                displayFormats: {
-                  hour: 'HH:mm',
-                  day: 'MMM dd'
-                }
-              },
-              grid: {
-                color: 'rgba(0, 0, 0, 0.1)',
-                borderColor: 'rgba(0, 0, 0, 0.2)'
-              },
-              ticks: {
-                maxTicksLimit: 8,
-                font: { size: 11 }
-              }
+              time: { unit: currentRange === '1D' ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM dd' } },
+              grid: { color: 'rgba(0,0,0,0.04)', borderColor: 'rgba(0,0,0,0.06)' },
+              ticks: { maxTicksLimit: 8, font: { size: 11 } }
             },
             y: {
               beginAtZero: false,
-              grid: {
-                color: 'rgba(0, 0, 0, 0.1)',
-                borderColor: 'rgba(0, 0, 0, 0.2)'
-              },
+              grid: { color: 'rgba(0,0,0,0.04)', borderColor: 'rgba(0,0,0,0.06)' },
               ticks: {
                 font: { size: 11 },
-                callback: function(value) {
+                callback: function (value) {
                   return '$' + value.toFixed(2);
                 }
               }
             }
           },
-          interaction: {
-            mode: 'nearest',
-            axis: 'x',
-            intersect: false
-          },
-          elements: {
-            line: {
-              tension: 0.4 // Smoother lines
-            }
-          }
+          interaction: { mode: 'nearest', axis: 'x', intersect: false },
+          elements: { line: { tension: 0.4 } }
         }
       };
 
@@ -718,103 +682,38 @@
         return;
       }
 
-      $('newsGrid').innerHTML = '<div class="loading pulse">Loading latest news...</div>';
+      $('newsGrid').innerHTML = '<div class="loading pulse text-sm">Loading latest news...</div>';
       lastNewsUpdate = now;
 
       try {
         // Use reliable news API with fallbacks
-        const newsSources = [
-          {
-            name: 'Financial News',
-            url: 'https://newsapi.org/v2/top-headlines?category=business&language=en&pageSize=9&apiKey=test'
-          }
-        ];
-
-        let newsItems = [];
-        
-        // Fallback to static financial news if APIs fail
+        // NOTE: placeholder API key used in original; we keep fallback items for UX
         const fallbackNews = [
-          {
-            title: 'Global Markets Show Resilience Amid Economic Shifts',
-            summary: 'Major indices demonstrate strength as investors adapt to new market conditions.',
-            image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date().toISOString()
-          },
-          {
-            title: 'Tech Sector Leads Market Recovery in Q4',
-            summary: 'Technology stocks show strong performance driven by AI and cloud computing growth.',
-            image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 86400000).toISOString()
-          },
-          {
-            title: 'Cryptocurrency Market Experiences Volatility',
-            summary: 'Digital assets fluctuate as regulatory developments impact investor sentiment.',
-            image: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 172800000).toISOString()
-          },
-          {
-            title: 'Federal Reserve Maintains Interest Rate Policy',
-            summary: 'Central bank holds steady on rates amid stable inflation indicators.',
-            image: 'https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 259200000).toISOString()
-          },
-          {
-            title: 'Energy Sector Benefits from Supply Adjustments',
-            summary: 'Oil and gas companies see gains as production levels stabilize.',
-            image: 'https://images.unsplash.com/photo-1504893524553-b855bceeacef?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 345600000).toISOString()
-          },
-          {
-            title: 'Emerging Markets Offer Growth Opportunities',
-            summary: 'Developing economies present attractive investment prospects for 2024.',
-            image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 432000000).toISOString()
-          },
-          {
-            title: 'Sustainable Investing Gains Mainstream Attention',
-            summary: 'ESG funds attract record inflows as investors prioritize environmental factors.',
-            image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 518400000).toISOString()
-          },
-          {
-            title: 'Banking Sector Implements Digital Transformation',
-            summary: 'Financial institutions accelerate adoption of blockchain and AI technologies.',
-            image: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 604800000).toISOString()
-          },
-          {
-            title: 'Real Estate Markets Show Regional Variations',
-            summary: 'Property prices demonstrate mixed trends across different geographic markets.',
-            image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&h=400&fit=crop',
-            url: '#',
-            date: new Date(Date.now() - 691200000).toISOString()
-          }
+          { title: 'Global Markets Show Resilience Amid Economic Shifts', summary: 'Major indices demonstrate strength as investors adapt to new market conditions.', image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop', url: '#', date: new Date().toISOString() },
+          { title: 'Tech Sector Leads Market Recovery in Q4', summary: 'Technology stocks show strong performance driven by AI and cloud computing growth.', image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 86400000).toISOString() },
+          { title: 'Cryptocurrency Market Experiences Volatility', summary: 'Digital assets fluctuate as regulatory developments impact investor sentiment.', image: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 172800000).toISOString() },
+          { title: 'Federal Reserve Maintains Interest Rate Policy', summary: 'Central bank holds steady on rates amid stable inflation indicators.', image: 'https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 259200000).toISOString() },
+          { title: 'Energy Sector Benefits from Supply Adjustments', summary: 'Oil and gas companies see gains as production levels stabilize.', image: 'https://images.unsplash.com/photo-1504893524553-b855bceeacef?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 345600000).toISOString() },
+          { title: 'Emerging Markets Offer Growth Opportunities', summary: 'Developing economies present attractive investment prospects for 2024.', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 432000000).toISOString() },
+          { title: 'Sustainable Investing Gains Mainstream Attention', summary: 'ESG funds attract record inflows as investors prioritize environmental factors.', image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 518400000).toISOString() },
+          { title: 'Banking Sector Implements Digital Transformation', summary: 'Financial institutions accelerate adoption of blockchain and AI technologies.', image: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 604800000).toISOString() },
+          { title: 'Real Estate Markets Show Regional Variations', summary: 'Property prices demonstrate mixed trends across different geographic markets.', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now() - 691200000).toISOString() }
         ];
 
-        // Use fallback news immediately for better UX
-        newsItems = fallbackNews;
+        const newsItems = fallbackNews;
 
-        // Render news immediately
         const newsGrid = $('newsGrid');
         newsGrid.innerHTML = newsItems.map(item => {
           const title = item.title.length > 70 ? item.title.substring(0, 70) + '...' : item.title;
           const summary = item.summary.length > 100 ? item.summary.substring(0, 100) + '...' : item.summary;
-          
+
           return `
-            <a class="newsCard" href="${item.url}" target="_blank" rel="noopener noreferrer">
-              <img src="${item.image}" alt="${title}" loading="lazy">
-              <div class="body">
-                <h5>${title}</h5>
-                <div class="meta">${summary}</div>
-                <div class="meta" style="margin-top:4px">${new Date(item.date).toLocaleDateString()}</div>
+            <a class="newsCard block bg-white rounded-lg overflow-hidden border card-border hover:shadow-md transition-transform" href="${item.url}" target="_blank" rel="noopener noreferrer">
+              <img src="${item.image}" alt="${title}" loading="lazy" class="w-full h-36 object-cover">
+              <div class="p-3">
+                <h5 class="text-sm font-semibold mb-1">${title}</h5>
+                <div class="meta text-xs">${summary}</div>
+                <div class="meta text-xs mt-2">${new Date(item.date).toLocaleDateString()}</div>
               </div>
             </a>
           `;
@@ -822,7 +721,7 @@
 
       } catch (error) {
         console.error('Error loading news:', error);
-        $('newsGrid').innerHTML = '<div class="error">News feed updating...</div>';
+        $('newsGrid').innerHTML = '<div class="error text-sm">News feed updating...</div>';
       }
     }
 
@@ -835,7 +734,7 @@
       const closes = ohlc.map(d => d.c).filter(c => c > 0);
       const ma10 = simpleMovingAverage(closes, 10);
       const ma50 = simpleMovingAverage(closes, 50);
-      
+
       const currentMA10 = ma10[ma10.length - 1];
       const currentMA50 = ma50[ma50.length - 1];
       const currentPrice = closes[closes.length - 1];
@@ -860,10 +759,10 @@
 
     function updateAdvisories(symbol, data) {
       const advisoriesEl = $('advisories');
-      
+
       if (data.error) {
         advisoriesEl.innerHTML = `
-          <div class="error">
+          <div class="text-red-600">
             <strong>${symbol}</strong>: ${data.error}
           </div>
         `;
@@ -874,10 +773,10 @@
 
       advisoriesEl.innerHTML = `
         <strong>${symbol}</strong>
-        <div style="margin-top:6px">Recommendation: <strong>${signal.recommendation}</strong></div>
-        <div class="meta" style="margin-top:6px">${signal.reason}</div>
-        ${signal.momentum ? `<div class="meta" style="margin-top:6px">Momentum: ${signal.momentum}</div>` : ''}
-        <div style="margin-top:10px;font-size:13px;color:#0b76d1">
+        <div class="mt-2">Recommendation: <strong>${signal.recommendation}</strong></div>
+        <div class="meta mt-2">${signal.reason}</div>
+        ${signal.momentum ? `<div class="meta mt-2">Momentum: ${signal.momentum}</div>` : ''}
+        <div class="mt-3 text-sm text-sky-600">
           <strong>Live Data Analysis</strong> - Based on real market data
         </div>
       `;
@@ -887,9 +786,9 @@
     async function loadPosts() {
       const watchlist = getWatch().slice(0, 9);
       const postsArea = $('postsArea');
-      
-      postsArea.innerHTML = '<div class="loading pulse">Updating market data...</div>';
-      
+
+      postsArea.innerHTML = '<div class="loading pulse text-sm">Updating market data...</div>';
+
       try {
         const posts = await Promise.allSettled(
           watchlist.map(async (symbol) => {
@@ -906,29 +805,29 @@
                 'NVDA': 450 + (Math.random() - 0.5) * 25,
                 'META': 320 + (Math.random() - 0.5) * 15
               };
-              
+
               const basePrice = basePrices[symbol] || 100 + (Math.random() - 0.5) * 50;
               const change = (Math.random() - 0.5) * basePrice * 0.1;
               const currentPrice = basePrice + change;
               const changePercent = (change / basePrice) * 100;
-              
-              const changeClass = change >= 0 ? 'green' : '';
+
+              const changeClass = change >= 0 ? 'text-emerald-600' : 'text-red-600';
               const changeSymbol = change >= 0 ? '+' : '';
-              
+
               return `
-                <div class="post">
-                  <h4>${symbol}</h4>
+                <div class="post bg-white rounded-lg p-3 border card-border">
+                  <h4 class="text-sm font-semibold">${symbol}</h4>
                   <div class="meta">$${currentPrice.toFixed(2)}</div>
-                  <div class="change ${changeClass}">
+                  <div class="${changeClass} mt-1 text-sm">
                     ${changeSymbol}${change.toFixed(2)} (${changeSymbol}${Math.abs(changePercent).toFixed(2)}%)
                   </div>
-                  <div style="margin-top:4px;font-size:10px;color:#0b76d1">Live</div>
+                  <div class="text-xs text-sky-600 mt-2">Live</div>
                 </div>
               `;
             } catch (error) {
               return `
-                <div class="post">
-                  <h4>${symbol}</h4>
+                <div class="post bg-white rounded-lg p-3 border card-border">
+                  <h4 class="text-sm font-semibold">${symbol}</h4>
                   <div class="meta">Data updating</div>
                   <div class="change">--</div>
                 </div>
@@ -936,59 +835,59 @@
             }
           })
         );
-        
+
         const successfulPosts = posts.filter(p => p.status === 'fulfilled').map(p => p.value);
         postsArea.innerHTML = successfulPosts.join('');
-        
+
       } catch (error) {
         console.error('Error loading posts:', error);
-        postsArea.innerHTML = '<div class="error">Market data updating...</div>';
+        postsArea.innerHTML = '<div class="error text-sm">Market data updating...</div>';
       }
     }
 
     // MAIN SYMBOL LOADING - Fast and reliable
     async function loadSymbol(symbol, range = '1D') {
       if (!symbol || symbol.trim() === '') return;
-      
+
       currentSymbol = symbol.toUpperCase().trim();
       currentRange = range;
-      
+
       const chartTitle = $('chartTitle');
       const chartUpdated = $('chartUpdated');
-      
+
       chartTitle.textContent = `Loading ${currentSymbol} (${range})...`;
       chartTitle.classList.add('loading');
-      
+
       try {
         let data;
-        
+
         // Determine data source based on symbol
         if (['BTC', 'ETH', 'ADA', 'SOL', 'DOT', 'DOGE', 'XRP', 'LTC', 'BNB', 'LINK'].includes(currentSymbol)) {
           data = await fetchCryptoData(currentSymbol);
         } else {
           data = await fetchStockData(currentSymbol, range);
         }
-        
+
         // Render chart and update UI
         renderChart(data.ohlc, currentSymbol);
         chartUpdated.textContent = data.last ? new Date(data.last).toLocaleString() : 'Just now';
         updateAdvisories(currentSymbol, data);
-        
+
         chartTitle.classList.remove('loading');
         chartTitle.textContent = `${currentSymbol} (${range}) - Live Data`;
-        
+
       } catch (error) {
         console.error(`Error loading symbol ${currentSymbol}:`, error);
-        
+
         chartTitle.classList.remove('loading');
         chartTitle.textContent = `${currentSymbol} (${range})`;
         chartUpdated.textContent = 'Data updating';
-        
+
         $('advisories').innerHTML = `
-          <div class="error">
+          <div class="text-red-600">
             <strong>${currentSymbol}</strong>: ${error.message}
           </div>
-          <div style="margin-top:8px;font-size:13px">
+          <div class="mt-2 text-sm">
             Please try a different symbol or refresh the page.
           </div>
         `;
@@ -998,103 +897,93 @@
     // Initialize the dashboard
     async function loadAll() {
       renderWatch();
-      
+
       // Load everything in parallel for faster startup
       await Promise.allSettled([
         loadCryptoAdvice(), // This will now load immediately
         loadNews(),
         loadPosts()
       ]);
-      
+
       // Setup UI controls
       const ranges = ['1D', '1W', '1M', '3M', '1Y'];
       const timeRangeDiv = $('timeRange');
-      timeRangeDiv.innerHTML = ranges.map(range => 
-        `<button class="${range === '1D' ? 'active' : ''}" data-range="${range}">${range}</button>`
+      timeRangeDiv.innerHTML = ranges.map(range =>
+        `<button class="px-2 py-1 rounded text-xs ${range === '1D' ? 'bg-sky-600 text-white' : 'bg-slate-100'}" data-range="${range}">${range}</button>`
       ).join('');
-      
+
       timeRangeDiv.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-          timeRangeDiv.querySelector('.active')?.classList.remove('active');
-          btn.classList.add('active');
+          timeRangeDiv.querySelector('.bg-sky-600')?.classList.remove('bg-sky-600','text-white');
+          btn.classList.add('bg-sky-600','text-white');
           if (currentSymbol) {
             loadSymbol(currentSymbol, btn.dataset.range);
           }
         });
       });
-      
+
       const chartTypes = [
         { type: 'candlestick', label: 'Candlestick' },
         { type: 'line', label: 'Line' },
         { type: 'bar', label: 'Bar' }
       ];
       const chartTypeDiv = $('chartType');
-      chartTypeDiv.innerHTML = chartTypes.map(({ type, label }) => 
-        `<button class="${type === 'candlestick' ? 'active' : ''}" data-type="${type}">${label}</button>`
+      chartTypeDiv.innerHTML = chartTypes.map(({ type, label }) =>
+        `<button class="px-2 py-1 rounded text-xs ${type === 'candlestick' ? 'bg-slate-200' : 'bg-slate-100'}" data-type="${type}">${label}</button>`
       ).join('');
-      
+
       chartTypeDiv.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-          chartTypeDiv.querySelector('.active')?.classList.remove('active');
-          btn.classList.add('active');
+          chartTypeDiv.querySelector('.bg-sky-600')?.classList.remove('bg-sky-600','text-white');
+          chartTypeDiv.querySelector('.bg-slate-200')?.classList.remove('bg-slate-200');
+          btn.classList.add('bg-slate-200');
           currentChartType = btn.dataset.type;
-          if (currentSymbol) {
-            loadSymbol(currentSymbol, currentRange);
-          }
+          if (currentSymbol) { loadSymbol(currentSymbol, currentRange); }
         });
       });
-      
+
       $('indicatorSelect').addEventListener('change', (e) => {
         currentIndicator = e.target.value;
-        if (currentSymbol) {
-          loadSymbol(currentSymbol, currentRange);
-        }
+        if (currentSymbol) { loadSymbol(currentSymbol, currentRange); }
       });
-      
+
       const firstSymbol = getWatch()[0];
-      if (firstSymbol) {
-        loadSymbol(firstSymbol);
-      }
+      if (firstSymbol) { loadSymbol(firstSymbol); }
     }
 
     // Event listeners
     $('loadBtn').addEventListener('click', () => {
       const symbol = $('globalSearch').value.trim();
-      if (!symbol) {
-        alert('Please enter a symbol');
-        return;
-      }
-      
+      if (!symbol) { alert('Please enter a symbol'); return; }
+
       const watchlist = getWatch();
       if (!watchlist.includes(symbol.toUpperCase())) {
         watchlist.unshift(symbol.toUpperCase());
         saveWatch(watchlist);
         renderWatch();
       }
-      
+
       $('globalSearch').value = '';
       loadSymbol(symbol);
     });
 
     $('globalSearch').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        $('loadBtn').click();
-      }
+      if (e.key === 'Enter') { $('loadBtn').click(); }
     });
 
     $('sendBtn').addEventListener('click', () => {
       const name = $('name').value.trim();
       const email = $('email').value.trim();
       const message = $('message').value.trim();
-      
+
       if (!name || !email || !message) {
         $('sendStatus').textContent = 'Please fill all fields.';
         return;
       }
-      
+
       const subject = `Contact from ${name} - JDGlobal Markets`;
       const body = `Message: ${message}\n\nFrom: ${name} <${email}>`;
-      
+
       window.location.href = `mailto:wambuamwanza6@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       $('sendStatus').textContent = 'Opening email client...';
     });
@@ -1102,18 +991,14 @@
     // Initialize with fast loading
     document.addEventListener('DOMContentLoaded', () => {
       loadAll();
-      
+
       // Fast periodic updates - crypto updates every minute
       setInterval(() => {
-        loadCryptoAdvice(); // Update crypto more frequently
+        loadCryptoAdvice();
         loadPosts();
-        if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) {
-          loadNews();
-        }
+        if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) { loadNews(); }
         // Refresh current symbol more frequently
-        if (currentSymbol) {
-          loadSymbol(currentSymbol, currentRange);
-        }
+        if (currentSymbol) { loadSymbol(currentSymbol, currentRange); }
       }, 60000); // Update every minute for better performance
     });
   </script>
