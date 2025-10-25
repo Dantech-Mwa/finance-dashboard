@@ -185,7 +185,7 @@
       if (!symbol) return;
       if (binanceWS) try { binanceWS.close(); } catch(e) {}
       const lower = symbol.toLowerCase();
-      const url = `wss://stream.binance.com:9443/stream`;
+      const url = `wss://stream.binance.com:9443/ws/${lower}@trade`;
       try {
         binanceWS = new WebSocket(url);
         updateWebSocketStatus('Connecting...');
@@ -200,11 +200,6 @@
 
       binanceWS.onopen = () => {
         console.log('Binance WS open for', symbol);
-        binanceWS.send(JSON.stringify({
-          method: 'SUBSCRIBE',
-          params: [`${lower}@trade`],
-          id: 1
-        }));
         updateWebSocketStatus('connected');
         useFallbackData = false;
         stopFallbackData();
@@ -219,12 +214,10 @@
       binanceWS.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          if (msg.stream && msg.data) {
-            const price = parseFloat(msg.data.p);
-            const ts = msg.data.T || Date.now();
-            tradeBuffer.push({ price, ts });
-            processTradeBuffer();
-          }
+          const price = parseFloat(msg.p);
+          const ts = msg.T || Date.now();
+          tradeBuffer.push({ price, ts });
+          processTradeBuffer();
         } catch (e) {
           console.error('WS message error', e);
           updateWebSocketStatus('connected', 'Message parse error');
@@ -262,14 +255,15 @@
       const now = Date.now();
       const sec = Math.floor(now / 1000) * 1000;
       const prices = tradeBuffer.map(t => t.price);
-      const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+      const counts = tradeBuffer.length;
+      const avgPrice = prices.reduce((sum, p) => sum + p, 0) / counts;
       const maxPrice = Math.max(...prices);
       const minPrice = Math.min(...prices);
       tradeBuffer = [];
 
       if (!currentBucket || currentBucket.t !== sec) {
         const lastClose = currentBucket ? currentBucket.c : avgPrice;
-        currentBucket = { t: sec, o: lastClose, h: maxPrice, l: minPrice, c: avgPrice };
+        currentBucket = { t: sec, o: lastClose, h: maxPrice, l: minPrice, c: avgPrice, count: counts };
         if (currentChartType === 'candlestick') {
           const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
           if (ds) {
@@ -298,41 +292,44 @@
       } else {
         currentBucket.h = Math.max(currentBucket.h, maxPrice);
         currentBucket.l = Math.min(currentBucket.l, minPrice);
-        currentBucket.c = avgPrice;
+        currentBucket.c = (currentBucket.c * currentBucket.count + avgPrice * counts) / (currentBucket.count + counts);
+        currentBucket.count += counts;
         if (currentChartType === 'candlestick') {
           const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
           if (ds && ds.data.length) {
             const last = ds.data[ds.data.length - 1];
-            last.h = Math.max(last.h, maxPrice);
-            last.l = Math.min(last.l, minPrice);
-            last.c = avgPrice;
+            last.h = currentBucket.h;
+            last.l = currentBucket.l;
+            last.c = currentBucket.c;
           }
         } else {
           const d0 = ohlcChart.data.datasets[0];
-          if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = avgPrice;
+          if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = currentBucket.c;
         }
       }
 
-      liveLineBuffer.push({ x: sec, y: avgPrice });
+      liveLineBuffer.push({ x: sec, y: currentBucket.c });
       if (liveLineBuffer.length > LIVE_LINE_MAX) liveLineBuffer.shift();
+
+      const live slidingWindow = liveLineBuffer.slice(-MAX_POINTS);
+      if (slidingWindow.length < 2) slidingWindow.unshift({ x: sec - 1000, y: currentBucket.c });
 
       const liveLabel = `LIVE: ${currentSymbol}`;
       let liveIdx = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
-      const livePoints = liveLineBuffer.slice(-LIVE_LINE_MAX);
       if (liveIdx === -1) {
         ohlcChart.data.datasets.push({
           label: liveLabel,
-          data: livePoints,
+          data: slidingWindow,
           type: 'line',
           borderColor: 'rgba(255,77,77,0.7)',
           backgroundColor: 'rgba(255,77,77,0.05)',
           pointRadius: 0,
-          borderWidth: 1.0,
+          borderWidth: 0.8,
           tension: 0.3,
           yAxisID: 'y'
         });
       } else {
-        ohlcChart.data.datasets[liveIdx].data = livePoints;
+        ohlcChart.data.datasets[liveIdx].data = slidingWindow;
       }
 
       const cndIdx = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
@@ -340,16 +337,17 @@
       if (mainData.length > MAX_POINTS) mainData.splice(0, mainData.length - MAX_POINTS);
 
       if (mainData.length > 0) {
-        ohlcChart.options.scales.x.min = mainData[mainData.length - MAX_POINTS]?.x || mainData[0].x;
-        ohlcChart.options.scales.x.max = mainData[mainData.length - 1].x;
+        const now = Date.now();
+        ohlcChart.options.scales.x.min = now - 60000;
+        ohlcChart.options.scales.x.max = now;
         const prices = mainData.map(d => d.c || d.y);
-        const minPrice = Math.min(...prices);
-        const maxPrice = Math.max(...prices);
+        const minPrice = Math.min(...prices, currentBucket.c);
+        const maxPrice = Math.max(...prices, currentBucket.c);
         const range = maxPrice - minPrice;
         const threshold = range * 0.01;
-        if (avgPrice < ohlcChart.options.scales.y.min + threshold || avgPrice > ohlcChart.options.scales.y.max - threshold) {
-          ohlcChart.options.scales.y.min = Math.min(minPrice, avgPrice) - range * 0.03;
-          ohlcChart.options.scales.y.max = Math.max(maxPrice, avgPrice) + range * 0.03;
+        if (currentBucket.c < ohlcChart.options.scales.y.min + threshold || currentBucket.c > ohlcChart.options.scales.y.max - threshold) {
+          ohlcChart.options.scales.y.min = minPrice - range * 0.02;
+          ohlcChart.options.scales.y.max = maxPrice + range * 0.02;
         }
       }
 
@@ -357,7 +355,7 @@
       requestAnimationFrame(() => {
         try { ohlcChart.update('none'); } catch (e) { try { ohlcChart.update(); } catch(e) {} }
       });
-      $('chartTitle').textContent = `${currentSymbol} (${currentRange}) - Last: $${avgPrice.toFixed(currentSymbol === 'BTC' || currentSymbol === 'ETH' ? 2 : 4)}`;
+      $('chartTitle').textContent = `${currentSymbol} (${currentRange}) - Last: $${currentBucket.c.toFixed(currentSymbol === 'BTC' || currentSymbol === 'ETH' ? 2 : 4)}`;
       $('chartUpdated').textContent = new Date(sec).toLocaleTimeString();
     }
 
@@ -663,6 +661,7 @@
       const ctx = canvas.getContext('2d');
       if (ohlcChart) {
         try { ohlcChart.destroy(); } catch(e) {}
+        ohlcChart = null;
       }
       if (!ohlc || ohlc.length === 0) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -708,6 +707,7 @@
         });
       }
 
+      const now = Date.now();
       const config = {
         type: currentChartType === 'candlestick' ? 'candlestick' : 'line',
         data: { datasets },
@@ -736,8 +736,8 @@
               time: { unit: currentRange === '1D' ? 'second' : 'day', displayFormats: { second: 'HH:mm:ss', day: 'MMM dd' } }, 
               grid: { color: 'rgba(0,0,0,0.04)' }, 
               ticks: { maxTicksLimit: 8, font: { size: 10, family: 'Inter' } },
-              min: ohlcData[0].x,
-              max: ohlcData[ohlcData.length - 1].x
+              min: now - 60000,
+              max: now
             },
             y: { 
               beginAtZero: false, 
@@ -746,8 +746,8 @@
                 callback: function(value) { return '$' + value.toFixed(2); }, 
                 font: { size: 10, family: 'Inter' } 
               },
-              min: minPrice - range * 0.03,
-              max: maxPrice + range * 0.03
+              min: minPrice - range * 0.02,
+              max: maxPrice + range * 0.02
             }
           }
         }
@@ -865,6 +865,11 @@
       currentBucket = null;
       liveLineBuffer = [];
       lastUpdate = 0;
+      if (ohlcChart) {
+        ohlcChart.data.datasets = [];
+        try { ohlcChart.destroy(); } catch(e) {}
+        ohlcChart = null;
+      }
 
       try {
         let data;
