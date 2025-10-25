@@ -131,8 +131,7 @@
 </footer>  </div>
 
   <script>
-    const ALPHA_VANTAGE_API_KEY = 'INZ7GV3B33PXV2QM';
-    const COINCAP_API_KEY = '0afc0e9b884ade2e24eaa151b4559b4fb9ebf825b32771278ca1b4641c96aa1b'; // Replace with your CoinCap API key
+    const COIN_API_KEY = '0afc0e9b884ade2e24eaa151b4559b4fb9ebf825b32771278ca1b4641c96aa1b';
     let lastNewsUpdate = 0;
     let lastCryptoUpdate = 0;
     const NEWS_UPDATE_INTERVAL = 300000;
@@ -570,7 +569,7 @@
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       try { 
-        const response = await fetch(url, { signal: controller.signal }); 
+        const response = await fetch(url, { signal: controller.signal, headers: { 'X-CoinAPI-Key': COIN_API_KEY } }); 
         clearTimeout(timeoutId); 
         return response; 
       } catch (error) { 
@@ -585,33 +584,34 @@
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) return cached.data;
 
       const coinMap = {
-        'BTC': 'bitcoin',
-        'ETH': 'ethereum',
-        'ADA': 'cardano',
-        'SOL': 'solana',
-        'DOT': 'polkadot',
-        'DOGE': 'dogecoin',
-        'XRP': 'ripple',
-        'LTC': 'litecoin',
-        'BNB': 'binance-coin',
-        'LINK': 'chainlink'
+        'BTC': 'BTC',
+        'ETH': 'ETH',
+        'ADA': 'ADA',
+        'SOL': 'SOL',
+        'DOT': 'DOT',
+        'DOGE': 'DOGE',
+        'XRP': 'XRP',
+        'LTC': 'LTC',
+        'BNB': 'BNB',
+        'LINK': 'LINK'
       };
       const coinId = coinMap[symbol];
       if (!coinId) throw new Error('Unsupported cryptocurrency');
 
       try {
-        const response = await fetchWithTimeout(`https://api.coincap.io/v2/candles?exchange=binance&interval=m1&baseId=${coinId}&quoteId=tether`);
+        const period = '1MIN';
+        const response = await fetchWithTimeout(`https://rest.coinapi.io/v1/ohlcv/BINANCE_SPOT_${coinId}_USDT/history?period_id=${period}&time_start=${new Date(Date.now() - 3600000).toISOString()}&limit=60`);
         const data = await response.json();
-        if (!data.data) throw new Error('No data returned from CoinCap API');
+        if (!Array.isArray(data)) throw new Error('No data returned from CoinAPI');
 
-        const ohlc = data.data.map(candle => ({
-          t: new Date(candle.period).getTime(),
-          o: parseFloat(candle.open),
-          h: parseFloat(candle.high),
-          l: parseFloat(candle.low),
-          c: parseFloat(candle.close),
-          v: parseFloat(candle.volume)
-        }));
+        const ohlc = data.map(candle => ({
+          t: new Date(candle.time_period_start).getTime(),
+          o: parseFloat(candle.price_open),
+          h: parseFloat(candle.price_high),
+          l: parseFloat(candle.price_low),
+          c: parseFloat(candle.price_close),
+          v: parseFloat(candle.volume_traded)
+        })).sort((a, b) => a.t - b.t);
 
         const result = { ohlc, last: new Date().toISOString() };
         dataCache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -627,39 +627,29 @@
       const cached = dataCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) return cached.data;
 
-      let interval, timeSeriesKey;
+      let period;
       switch (range) {
-        case '1D': interval = '1min'; timeSeriesKey = 'Time Series (1min)'; break;
-        case '1W': interval = '5min'; timeSeriesKey = 'Time Series (5min)'; break;
-        case '1M': interval = '60min'; timeSeriesKey = 'Time Series (60min)'; break;
-        case '3M': interval = 'daily'; timeSeriesKey = 'Time Series (Daily)'; break;
-        case '1Y': interval = 'daily'; timeSeriesKey = 'Time Series (Daily)'; break;
+        case '1D': period = '1MIN'; break;
+        case '1W': period = '5MIN'; break;
+        case '1M': period = '1HRS'; break;
+        case '3M': period = '1DAY'; break;
+        case '1Y': period = '1DAY'; break;
         default: throw new Error('Invalid range');
       }
 
       try {
-        const response = await fetchWithTimeout(`https://www.alphavantage.co/query?function=TIME_SERIES_${interval.toUpperCase()}&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`);
+        const response = await fetchWithTimeout(`https://rest.coinapi.io/v1/ohlcv/${symbol}/USD/history?period_id=${period}&time_start=${new Date(Date.now() - (range === '1Y' ? 31536000000 : range === '3M' ? 7776000000 : 3600000)).toISOString()}&limit=${range === '1Y' ? 365 : range === '3M' ? 90 : 60}`);
         const data = await response.json();
-        if (data['Error Message']) throw new Error(data['Error Message']);
-        if (!data[timeSeriesKey]) throw new Error('No time series data returned');
+        if (!Array.isArray(data)) throw new Error('No data returned from CoinAPI');
 
-        const timeSeries = data[timeSeriesKey];
-        const ohlc = Object.entries(timeSeries)
-          .map(([time, values]) => ({
-            t: new Date(time).getTime(),
-            o: parseFloat(values['1. open']),
-            h: parseFloat(values['2. high']),
-            l: parseFloat(values['3. low']),
-            c: parseFloat(values['4. close']),
-            v: parseFloat(values['5. volume'])
-          }))
-          .sort((a, b) => a.t - b.t);
-
-        if (range === '1Y') {
-          ohlc.splice(0, ohlc.length - 365); // Limit to 1 year
-        } else if (range === '3M') {
-          ohlc.splice(0, ohlc.length - 90);
-        }
+        const ohlc = data.map(candle => ({
+          t: new Date(candle.time_period_start).getTime(),
+          o: parseFloat(candle.price_open),
+          h: parseFloat(candle.price_high),
+          l: parseFloat(candle.price_low),
+          c: parseFloat(candle.price_close),
+          v: parseFloat(candle.volume_traded)
+        })).sort((a, b) => a.t - b.t);
 
         const result = { ohlc, last: new Date().toISOString() };
         dataCache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -677,11 +667,11 @@
       $('cryptoAdvice').innerHTML = '<div class="loading pulse text-sm">Loading live crypto data...</div>';
 
       try {
-        const response = await fetchWithTimeout('https://api.coincap.io/v2/assets?limit=10');
+        const response = await fetchWithTimeout('https://rest.coinapi.io/v1/assets?filter_asset_id=BTC;ETH;ADA;SOL;DOT;DOGE;XRP;LTC;BNB;LINK');
         const data = await response.json();
-        if (!data.data) throw new Error('No data returned from CoinCap API');
+        if (!Array.isArray(data)) throw new Error('No data returned from CoinAPI');
 
-        renderCryptoAdvice(data.data);
+        renderCryptoAdvice(data);
       } catch (error) {
         console.error('Error loading crypto advice:', error);
         $('cryptoAdvice').innerHTML = `<div class="text-red-600">Error loading crypto data: ${error.message}</div>`;
@@ -691,14 +681,14 @@
     function renderCryptoAdvice(cryptoData) {
       const cryptoAdviceEl = $('cryptoAdvice');
       const nodes = cryptoData.map(crypto => {
-        const symbol = (crypto.symbol || 'CRYPTO').toUpperCase();
-        const price = parseFloat(crypto.priceUsd).toLocaleString('en-US', { 
+        const symbol = (crypto.asset_id || 'CRYPTO').toUpperCase();
+        const price = parseFloat(crypto.price_usd).toLocaleString('en-US', { 
           style: 'currency', 
           currency: 'USD', 
-          minimumFractionDigits: parseFloat(crypto.priceUsd) < 1 ? 4 : 2, 
-          maximumFractionDigits: parseFloat(crypto.priceUsd) < 1 ? 4 : 2 
+          minimumFractionDigits: parseFloat(crypto.price_usd) < 1 ? 4 : 2, 
+          maximumFractionDigits: parseFloat(crypto.price_usd) < 1 ? 4 : 2 
         });
-        const change = parseFloat(crypto.changePercent24Hr) || 0;
+        const change = parseFloat(crypto.price_usd_change_24h_pct) || 0;
         const changeFormatted = Math.abs(change).toFixed(2);
         const changeColor = change >= 0 ? '#008800' : '#d32f2f';
         const changeSymbol = change >= 0 ? '+' : '';
@@ -734,16 +724,16 @@
       lastNewsUpdate = now;
 
       try {
-        const response = await fetchWithTimeout(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=AAPL&apikey=${ALPHA_VANTAGE_API_KEY}`);
+        const response = await fetchWithTimeout('https://rest.coinapi.io/v1/news');
         const data = await response.json();
-        if (!data.feed) throw new Error('No news data returned');
+        if (!Array.isArray(data)) throw new Error('No news data returned');
 
-        const newsItems = data.feed.slice(0, 3).map(item => ({
+        const newsItems = data.slice(0, 3).map(item => ({
           title: item.title,
-          summary: item.summary,
-          image: item.banner_image || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop',
+          summary: item.description || item.title,
+          image: item.image_url || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop',
           url: item.url,
-          date: item.time_published
+          date: item.published_at
         }));
 
         const newsGrid = $('newsGrid');
@@ -777,16 +767,17 @@
           try {
             let price, changePercent;
             if (Object.keys(BINANCE_STREAMS).includes(symbol)) {
-              const response = await fetchWithTimeout(`https://api.coincap.io/v2/assets/${symbol.toLowerCase()}`);
+              const response = await fetchWithTimeout(`https://rest.coinapi.io/v1/assets/${symbol}`);
               const data = await response.json();
-              price = parseFloat(data.data.priceUsd);
-              changePercent = parseFloat(data.data.changePercent24Hr);
+              if (!data[0]) throw new Error('No quote data');
+              price = parseFloat(data[0].price_usd);
+              changePercent = parseFloat(data[0].price_usd_change_24h_pct);
             } else {
-              const response = await fetchWithTimeout(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`);
+              const response = await fetchWithTimeout(`https://rest.coinapi.io/v1/quotes/${symbol}_USD/latest?limit=1`);
               const data = await response.json();
-              if (!data['Global Quote']) throw new Error('No quote data');
-              price = parseFloat(data['Global Quote']['05. price']);
-              changePercent = parseFloat(data['Global Quote']['10. change percent'].replace('%', ''));
+              if (!data[0]) throw new Error('No quote data');
+              price = parseFloat(data[0].ask_price);
+              changePercent = parseFloat(data[0].price_usd_change_24h_pct || 0);
             }
             const change = price * (changePercent / 100);
             const changeClass = changePercent >= 0 ? 'text-emerald-600' : 'text-red-600';
@@ -836,7 +827,7 @@
       }
 
       const now = Date.now();
-      const timeWindow = 60000;
+      const timeWindow = currentRange === '1D' ? 60000 : 86400000;
       const cutoffTime = now - timeWindow;
       
       let ohlcData = ohlc
