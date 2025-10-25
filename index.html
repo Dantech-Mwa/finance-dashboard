@@ -6,14 +6,10 @@
   <title>JDGlobal Markets</title>
   <meta name="description" content="Advanced finance dashboard with candlestick charts, indicators, trade advisories, crypto/forex signals and news thumbnails." />
 
-  <!-- Chart.js + Financial plugin -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
-  <!-- Zoom & Pan plugin for Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-
-  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
@@ -151,12 +147,13 @@
     let liveLineBuffer = [];
     let tradeBuffer = [];
     let lastUpdate = 0;
-    const MAX_POINTS = 60; // 60 seconds of data
-    const LIVE_LINE_MAX = 300; // 5 minutes for live line overlay
-    const UPDATE_INTERVAL = 200; // Batch updates every 200ms
+    const MAX_POINTS = 60;
+    const LIVE_LINE_MAX = 300;
+    const UPDATE_INTERVAL = 500;
     let useFallbackData = false;
     let reconnectAttempts = 0;
-    const MAX_RECONNECT_ATTEMPTS = 5;
+    const MAX_RECONNECT_ATTEMPTS = 3;
+    let heartbeatTimer = null;
 
     const $ = id => document.getElementById(id);
     const dataCache = new Map();
@@ -184,12 +181,11 @@
       }
     }
 
-    // Live WebSocket: per-trade stream, per-second candle bucketing
     function connectBinance(symbol) {
       if (!symbol) return;
       if (binanceWS) try { binanceWS.close(); } catch(e) {}
       const lower = symbol.toLowerCase();
-      const url = `wss://stream.binance.com:9443/ws/${lower}@trade`;
+      const url = `wss://stream.binance.com:9443/stream`;
       try {
         binanceWS = new WebSocket(url);
         updateWebSocketStatus('Connecting...');
@@ -204,19 +200,31 @@
 
       binanceWS.onopen = () => {
         console.log('Binance WS open for', symbol);
+        binanceWS.send(JSON.stringify({
+          method: 'SUBSCRIBE',
+          params: [`${lower}@trade`],
+          id: 1
+        }));
         updateWebSocketStatus('connected');
         useFallbackData = false;
         stopFallbackData();
         reconnectAttempts = 0;
+        heartbeatTimer = setInterval(() => {
+          if (binanceWS.readyState === WebSocket.OPEN) {
+            binanceWS.send(JSON.stringify({ method: 'PING', id: Date.now() }));
+          }
+        }, 30000);
       };
 
       binanceWS.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          const price = parseFloat(msg.p);
-          const ts = msg.T || Date.now();
-          tradeBuffer.push({ price, ts });
-          processTradeBuffer();
+          if (msg.stream && msg.data) {
+            const price = parseFloat(msg.data.p);
+            const ts = msg.data.T || Date.now();
+            tradeBuffer.push({ price, ts });
+            processTradeBuffer();
+          }
         } catch (e) {
           console.error('WS message error', e);
           updateWebSocketStatus('connected', 'Message parse error');
@@ -231,14 +239,16 @@
       };
 
       binanceWS.onclose = () => {
-        console.warn('Binance WS closed; reconnecting in 2s');
-        updateWebSocketStatus('disconnected', 'Reconnecting...');
+        console.warn('Binance WS closed');
+        clearInterval(heartbeatTimer);
         if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttempts++;
-          setTimeout(() => connectBinance(symbol), 2000);
+          const delay = 2000 * Math.pow(2, reconnectAttempts);
+          updateWebSocketStatus('disconnected', `Reconnecting in ${delay/1000}s...`);
+          setTimeout(() => connectBinance(symbol), delay);
         } else {
           console.error('Max reconnect attempts reached. Using fallback data.');
-          updateWebSocketStatus('disconnected', 'Max retries reached');
+          updateWebSocketStatus('disconnected', 'Using simulated data');
           useFallbackData = true;
           startFallbackData(symbol.replace('USDT', ''));
         }
@@ -246,9 +256,8 @@
     }
 
     function processTradeBuffer() {
-      if (Date.now() - lastUpdate < UPDATE_INTERVAL) return;
+      if (Date.now() - lastUpdate < UPDATE_INTERVAL || !tradeBuffer.length || !ohlcChart || !currentSymbol) return;
       lastUpdate = Date.now();
-      if (!tradeBuffer.length || !ohlcChart || !currentSymbol) return;
 
       const now = Date.now();
       const sec = Math.floor(now / 1000) * 1000;
@@ -315,11 +324,11 @@
           label: liveLabel,
           data: livePoints,
           type: 'line',
-          borderColor: 'rgba(255,77,77,0.8)',
+          borderColor: 'rgba(255,77,77,0.7)',
           backgroundColor: 'rgba(255,77,77,0.05)',
           pointRadius: 0,
           borderWidth: 1.0,
-          tension: 0.2,
+          tension: 0.3,
           yAxisID: 'y'
         });
       } else {
@@ -337,8 +346,11 @@
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
         const range = maxPrice - minPrice;
-        ohlcChart.options.scales.y.min = minPrice - range * 0.05;
-        ohlcChart.options.scales.y.max = maxPrice + range * 0.05;
+        const threshold = range * 0.01;
+        if (avgPrice < ohlcChart.options.scales.y.min + threshold || avgPrice > ohlcChart.options.scales.y.max - threshold) {
+          ohlcChart.options.scales.y.min = Math.min(minPrice, avgPrice) - range * 0.03;
+          ohlcChart.options.scales.y.max = Math.max(maxPrice, avgPrice) + range * 0.03;
+        }
       }
 
       scheduleIndicatorRecalc();
@@ -390,14 +402,13 @@
       });
     }
 
-    // Fallback data simulation for crypto and stocks
     function generateFallbackPrice(symbol, lastPrice) {
       const basePrices = {
         'BTC': 51000, 'ETH': 2900, 'BNB': 350, 'ADA': 0.52, 'SOL': 105, 'DOT': 7.2, 'DOGE': 0.12, 'XRP': 0.58, 'LTC': 72, 'LINK': 15.8,
         'AAPL': 180, 'MSFT': 330, 'GOOGL': 140, 'TSLA': 200, 'AMZN': 170, 'NVDA': 450, 'META': 320
       };
       const basePrice = lastPrice || basePrices[symbol.toUpperCase()] || 100;
-      const change = (Math.random() - 0.5) * basePrice * 0.003; // Reduced for realism
+      const change = (Math.random() - 0.5) * basePrice * 0.003;
       return basePrice + change;
     }
 
@@ -410,8 +421,8 @@
         const price = generateFallbackPrice(symbol, lastPrice);
         tradeBuffer.push({ price, ts: Date.now() });
         processTradeBuffer();
-      }, 1000);
-      $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live updates paused. Using simulated data. Please refresh or try a different network.</div>';
+      }, 500);
+      $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live updates paused. Using simulated data.</div>';
     }
 
     function stopFallbackData() {
@@ -419,6 +430,7 @@
         clearInterval(fallbackInterval);
         fallbackInterval = null;
       }
+      clearInterval(heartbeatTimer);
       useFallbackData = false;
     }
 
@@ -734,8 +746,8 @@
                 callback: function(value) { return '$' + value.toFixed(2); }, 
                 font: { size: 10, family: 'Inter' } 
               },
-              min: minPrice - range * 0.05,
-              max: maxPrice + range * 0.05
+              min: minPrice - range * 0.03,
+              max: maxPrice + range * 0.03
             }
           }
         }
@@ -847,7 +859,6 @@
       chartTitle.textContent = `Loading ${currentSymbol} (${range})...`;
       chartTitle.classList.add('loading');
 
-      // Clear previous state
       if (binanceWS) try { binanceWS.close(); } catch(e) {}
       stopFallbackData();
       tradeBuffer = [];
@@ -860,7 +871,7 @@
         const isCrypto = ['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol);
         if (isCrypto) {
           data = await fetchCryptoData(currentSymbol);
-          connectBinance(currentSymbol + 'USDT');
+          setTimeout(() => connectBinance(currentSymbol + 'USDT'), 5000);
         } else {
           data = await fetchStockData(currentSymbol, range);
           updateWebSocketStatus('disconnected', 'Using simulated data for stocks');
