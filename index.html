@@ -193,7 +193,7 @@
       document.querySelectorAll('.viewBtn').forEach(btn => { btn.addEventListener('click', () => loadSymbol(btn.dataset.sym)); });
     }
 
-    // Crypto helpers (unchanged except Binance WS integration)
+    // Crypto helpers
     async function fetchCryptoMarketsFast() {
       const cacheKey = 'crypto_markets_fast';
       const cached = dataCache.get(cacheKey);
@@ -398,77 +398,152 @@
       }
     }
 
-    // Real-time live tick integration using Binance websocket (client-side)
-    // WARNING: Don't subscribe to hundreds of streams from the browser. This subscribes to a configurable set.
+    // === Updated WebSocket Connection Management ===
     let binanceWS = null;
-    let binanceSubscribed = new Set(); // holds stream names
-    let liveSymbols = []; // e.g. ['BTC','ETH']
+    let binanceSubscribed = new Set(); // Holds stream names (e.g., 'btcusdt@trade')
+    let liveSymbols = []; // e.g., ['BTC', 'ETH']
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const BASE_RECONNECT_DELAY = 1000; // 1 second
+    const MAX_STREAMS = 5; // Limit to 5 streams to prevent overload
+
     function binanceStreamNameFor(sym) {
-      // map 'BTC' -> 'btcusdt@trade'
       return (sym + 'usdt').toLowerCase() + '@trade';
     }
-    function openBinanceWSIfNeeded() {
-      if (binanceWS && binanceWS.readyState === WebSocket.OPEN) return;
-      // open a single connection for fan-out subscription via Binance combined stream isn't used because we use single-stream parameter per connection via wss root (we will re-create if needed)
-      // We'll open one websocket per many streams by using binance combined stream endpoint:
-      // wss://stream.binance.com:9443/stream?streams=btcusdt@trade/ethusdt@trade/...
-    }
-    function subscribeBinanceStreams(symbols) {
-      // symbols: array of uppercase like ['BTC','ETH']
-      if (!symbols || symbols.length === 0) return;
-      // ensure uniq
-      const streams = Array.from(new Set(symbols.map(s => binanceStreamNameFor(s))));
-      const streamsToSubscribe = streams.filter(s => !binanceSubscribed.has(s));
-      if (streamsToSubscribe.length === 0) return;
 
-      // close old WS then open a new combined WS with all streams (simpler than managing LISTEN commands)
-      binanceSubscribed = new Set(streams); // update tracked
-      if (binanceWS) try { binanceWS.close(); } catch(e){}
-      const combined = streams.join('/');
-      const url = `wss://stream.binance.com:9443/stream?streams=${combined}`;
-      binanceWS = new WebSocket(url);
+    function openBinanceWS() {
+      if (binanceWS && binanceWS.readyState === WebSocket.OPEN) return;
+
+      // Close existing connection if any
+      if (binanceWS) {
+        try { binanceWS.close(); } catch (e) {}
+      }
+
+      binanceWS = new WebSocket('wss://stream.binance.com:9443/ws');
       binanceWS.onopen = () => {
-        console.log('Binance WS opened for', streams);
+        console.log('Binance WebSocket opened');
+        reconnectAttempts = 0; // Reset on successful connection
+        // Resubscribe to existing streams
+        if (binanceSubscribed.size > 0) {
+          subscribeToStreams(Array.from(binanceSubscribed));
+        }
       };
+
       binanceWS.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          // combined stream message structure: { stream: "btcusdt@trade", data: { ... } }
+          // Handle both single stream and combined stream messages
           const data = msg.data || msg;
-          if (data && data.p) {
-            // trade price string in p
+          if (data && data.p && data.s) {
             const price = parseFloat(data.p);
-            const stream = msg.stream || '';
-            // e.g. 'btcusdt@trade' -> symbol = 'BTC'
-            const sym = stream.split('@')[0].replace('usdt','').toUpperCase();
-            handleBinanceTrade(sym, price);
+            const symbol = data.s.replace('USDT', '').toUpperCase();
+            handleBinanceTrade(symbol, price);
           }
         } catch (e) {
-          // ignore parse errors
+          console.error('WebSocket message parse error:', e);
         }
       };
-      binanceWS.onerror = (err) => { console.error('Binance WS error', err); };
-      binanceWS.onclose = () => { console.log('Binance WS closed'); };
+
+      binanceWS.onerror = (err) => {
+        console.error('Binance WebSocket error:', err);
+      };
+
+      binanceWS.onclose = () => {
+        console.log('Binance WebSocket closed');
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts);
+          console.log(`Attempting to reconnect in ${delay}ms... (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+          setTimeout(() => {
+            reconnectAttempts++;
+            openBinanceWS();
+          }, delay);
+        } else {
+          console.error('Max reconnect attempts reached. WebSocket updates paused.');
+          // Notify user (optional)
+          $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live crypto updates paused. Please refresh the page.</div>';
+        }
+      };
     }
 
-    // live price buffer for overlay / animation
+    function subscribeToStreams(streams) {
+      if (!binanceWS || binanceWS.readyState !== WebSocket.OPEN) {
+        console.log('WebSocket not open, opening and queuing subscription');
+        openBinanceWS();
+        return;
+      }
+      if (streams.length === 0) return;
+
+      const params = {
+        method: 'SUBSCRIBE',
+        params: streams,
+        id: Date.now()
+      };
+      try {
+        binanceWS.send(JSON.stringify(params));
+        console.log('Subscribed to streams:', streams);
+        streams.forEach(stream => binanceSubscribed.add(stream));
+      } catch (e) {
+        console.error('Error subscribing to streams:', e);
+      }
+    }
+
+    function unsubscribeFromStreams(streams) {
+      if (!binanceWS || binanceWS.readyState !== WebSocket.OPEN) return;
+
+      const params = {
+        method: 'UNSUBSCRIBE',
+        params: streams,
+        id: Date.now()
+      };
+      try {
+        binanceWS.send(JSON.stringify(params));
+        console.log('Unsubscribed from streams:', streams);
+        streams.forEach(stream => binanceSubscribed.delete(stream));
+      } catch (e) {
+        console.error('Error unsubscribing from streams:', e);
+      }
+    }
+
+    function subscribeBinanceStreams(symbols) {
+      if (!symbols || symbols.length === 0) return;
+
+      // Limit to MAX_STREAMS
+      const validSymbols = Array.from(new Set(symbols)).slice(0, MAX_STREAMS);
+      const newStreams = validSymbols.map(binanceStreamNameFor);
+      const currentStreams = Array.from(binanceSubscribed);
+      const streamsToSubscribe = newStreams.filter(s => !binanceSubscribed.has(s));
+      const streamsToUnsubscribe = currentStreams.filter(s => !newStreams.includes(s));
+
+      // Update liveSymbols
+      liveSymbols = validSymbols;
+
+      // Unsubscribe from streams no longer needed
+      if (streamsToUnsubscribe.length > 0) {
+        unsubscribeFromStreams(streamsToUnsubscribe);
+      }
+
+      // Subscribe to new streams
+      if (streamsToSubscribe.length > 0) {
+        subscribeToStreams(streamsToSubscribe);
+      }
+    }
+
+    // Live price buffer for overlay / animation
     const liveBuffers = {}; // { 'BTC': [ {x:ts, y:price}, ... ] }
     function handleBinanceTrade(symbol, price) {
       if (!symbol) return;
       const now = Date.now();
       if (!liveBuffers[symbol]) liveBuffers[symbol] = [];
       liveBuffers[symbol].push({ x: now, y: price });
-      // keep last 120 points per symbol
+      // Keep last 120 points per symbol
       if (liveBuffers[symbol].length > 120) liveBuffers[symbol].shift();
 
       // If current chart is showing this symbol, update live series
       if (currentSymbol === symbol && ohlcChart) {
-        // find dataset labeled "LIVE: <symbol>"
         const liveLabel = `LIVE: ${symbol}`;
         const dsIndex = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
         const currentPoint = { x: now, y: price };
         if (dsIndex === -1) {
-          // add new live dataset overlay as line
           ohlcChart.data.datasets.push({
             label: liveLabel,
             data: liveBuffers[symbol].slice(-60),
@@ -482,22 +557,18 @@
           });
         } else {
           const ds = ohlcChart.data.datasets[dsIndex];
-          // append new point
           ds.data.push(currentPoint);
-          // cap points
           if (ds.data.length > 120) ds.data.shift();
         }
-        // animate small update
         try {
-          ohlcChart.update('mixed'); // short update
+          ohlcChart.update('mixed');
         } catch (e) {
-          // fallback
           ohlcChart.update();
         }
       }
     }
 
-    // Chart rendering (Chart.js with financial plugin and zoom)
+    // Chart rendering
     function renderChart(ohlc, label) {
       const canvas = $('ohlcChart');
       const ctx = canvas.getContext('2d');
@@ -515,7 +586,6 @@
         return;
       }
 
-      // convert to Chart.js financial dataset (x in ms)
       const ohlcData = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
 
       const datasets = [];
@@ -540,7 +610,6 @@
         });
       }
 
-      // Moving average
       if (currentIndicator !== 'none') {
         const n = parseInt(currentIndicator.replace('ma',''));
         const closes = ohlc.map(d => d.c);
@@ -560,7 +629,6 @@
         }
       }
 
-      // If we have live buffer for this symbol, add live overlay dataset
       const liveBuffer = liveBuffers[label];
       if (liveBuffer && liveBuffer.length > 0) {
         datasets.push({
@@ -601,7 +669,6 @@
       try { ohlcChart = new Chart(ctx, config); }
       catch (e) { console.error('Chart render error:', e); }
 
-      // apply zoom slider initial mapping
       applyZoomFromSlider();
     }
 
@@ -614,7 +681,7 @@
       return res;
     }
 
-    // News: show up to 6 fallback items
+    // News
     async function loadNews() {
       const now = Date.now();
       if (now - lastNewsUpdate < NEWS_UPDATE_INTERVAL && $('newsGrid').children.length > 1) return;
@@ -630,7 +697,7 @@
           { title: 'Emerging Markets Offer Growth Opportunities', summary: 'Developing economies present attractive investment prospects for 2024.', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop', url:'#', date: new Date(Date.now()-432000000).toISOString() }
         ];
 
-        const newsItems = fallbackNews.slice(0, 6); // show up to 6
+        const newsItems = fallbackNews.slice(0, 6);
         const newsGrid = $('newsGrid');
         newsGrid.innerHTML = newsItems.map(item => {
           const title = item.title.length > 70 ? item.title.substring(0,70) + '...' : item.title;
@@ -652,7 +719,7 @@
       }
     }
 
-    // Trading analysis functions preserved
+    // Trading analysis
     function computeSignalsFromOHLC(ohlc) {
       if (!ohlc || ohlc.length < 20) return { recommendation:'Hold', reason:'Insufficient data for analysis' };
       const closes = ohlc.map(d => d.c).filter(c => c > 0);
@@ -682,7 +749,7 @@
       `;
     }
 
-    // Posts (unchanged)
+    // Posts
     async function loadPosts() {
       const watchlist = getWatch().slice(0,9);
       const postsArea = $('postsArea');
@@ -710,7 +777,7 @@
       }
     }
 
-    // MAIN: loadSymbol - unchanged core logic but we wire websocket subs for crypto live overlay
+    // MAIN: loadSymbol
     async function loadSymbol(symbol, range = '1D') {
       if (!symbol || symbol.trim() === '') return;
       currentSymbol = symbol.toUpperCase().trim();
@@ -724,20 +791,16 @@
         let data;
         if (['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol)) {
           data = await fetchCryptoData(currentSymbol);
-          // ensure we subscribe to Binance stream for live ticks
-          // We'll subscribe to small set: user watchlist plus current symbol (but not too many)
-          // Build liveSymbols from first N of watchlist
+          // Subscribe to Binance WebSocket for live updates
           const watchlist = getWatch();
-          const toSubscribe = Array.from(new Set([ currentSymbol ].concat(watchlist.slice(0,5))));
-          liveSymbols = toSubscribe.filter(s => s && s.length>0);
+          const toSubscribe = Array.from(new Set([currentSymbol].concat(watchlist.slice(0, MAX_STREAMS - 1))));
+          liveSymbols = toSubscribe.filter(s => s && s.length > 0);
           subscribeBinanceStreams(liveSymbols);
         } else {
           data = await fetchStockData(currentSymbol, range);
         }
 
-        // store OHLC into liveBuffers map key to enable live overlay mapping
         liveBuffers[currentSymbol] = liveBuffers[currentSymbol] || [];
-        // Render chart & update
         renderChart(data.ohlc, currentSymbol);
         chartUpdated.textContent = data.last ? new Date(data.last).toLocaleString() : 'Just now';
         updateAdvisories(currentSymbol, data);
@@ -752,21 +815,19 @@
       }
     }
 
-    // Zoom slider mapping: slider value (1..100) -> visiblePoints fraction
+    // Zoom slider
     function applyZoomFromSlider() {
       const slider = $('zoomSlider');
       if (!ohlcChart || !slider) return;
-      const value = parseInt(slider.value, 10); // 1..100
-      // compute visible points from datasets[0] data length
+      const value = parseInt(slider.value, 10);
       const ds = ohlcChart.data.datasets && ohlcChart.data.datasets[0];
       if (!ds || !ds.data || ds.data.length === 0) return;
       const total = ds.data.length;
-      const visible = Math.max(10, Math.round(total * (value / 100))); // at least 10 points
+      const visible = Math.max(10, Math.round(total * (value / 100)));
       const lastIndex = total - 1;
       const firstIndex = Math.max(0, lastIndex - visible + 1);
       const minT = ds.data[firstIndex].x;
       const maxT = ds.data[lastIndex].x;
-      // apply to x scale
       try {
         ohlcChart.options.scales.x.min = minT;
         ohlcChart.options.scales.x.max = maxT;
@@ -776,17 +837,15 @@
       }
     }
 
-    // wire slider change
     document.addEventListener('input', (e) => {
       if (e.target && e.target.id === 'zoomSlider') applyZoomFromSlider();
     });
 
-    // INIT / setup UI controls (kept original style)
+    // INIT / setup UI controls
     async function loadAll() {
       renderWatch();
       await Promise.allSettled([ loadCryptoAdvice(), loadNews(), loadPosts() ]);
 
-      // time ranges
       const ranges = ['1D','1W','1M','3M','1Y'];
       const timeRangeDiv = $('timeRange');
       timeRangeDiv.innerHTML = ranges.map(range => `<button class="px-2 py-1 rounded text-xs ${range === '1D' ? 'bg-sky-600 text-white' : 'bg-slate-100'}" data-range="${range}">${range}</button>`).join('');
@@ -798,7 +857,6 @@
         });
       });
 
-      // chart types
       const chartTypes = [{ type:'candlestick', label:'Candlestick' },{ type:'line', label:'Line' },{ type:'bar', label:'Bar' }];
       const chartTypeDiv = $('chartType');
       chartTypeDiv.innerHTML = chartTypes.map(({type,label}) => `<button class="px-2 py-1 rounded text-xs ${type === 'candlestick' ? 'bg-slate-200' : 'bg-slate-100'}" data-type="${type}">${label}</button>`).join('');
@@ -817,14 +875,13 @@
         if (currentSymbol) loadSymbol(currentSymbol, currentRange);
       });
 
-      // initial zoom slider default 100% (show all) -> apply after initial chart render
       $('zoomSlider').value = 100;
 
       const firstSymbol = getWatch()[0];
       if (firstSymbol) loadSymbol(firstSymbol);
     }
 
-    // Event handlers preserved
+    // Event handlers
     $('loadBtn').addEventListener('click', () => {
       const symbol = $('globalSearch').value.trim();
       if (!symbol) { alert('Please enter a symbol'); return; }
@@ -845,15 +902,13 @@
       $('sendStatus').textContent = 'Opening email client...';
     });
 
-    // periodic updates & initialization
+    // Periodic updates & initialization
     document.addEventListener('DOMContentLoaded', () => {
       loadAll();
-      // refresh loop: crypto+posts every minute; attempt to update current symbol too
       setInterval(() => {
         loadCryptoAdvice(); loadPosts();
         if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) loadNews();
         if (currentSymbol) {
-          // refresh current symbol data less frequently if it's a stock; for crypto live overlay continues via websocket
           loadSymbol(currentSymbol, currentRange);
         }
       }, 60000);
