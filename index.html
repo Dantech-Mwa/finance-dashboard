@@ -17,15 +17,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
-    /* Keep the original feel + Tailwind */
     html, body { height: 100%; }
     body { font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif; background: #f6f8fb; color: #0b2240; margin: 0; padding: 18px; }
     #app { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 18px; border: 1px solid #e6eef6; box-shadow: 0 12px 40px rgba(13,30,50,0.06); }
-
-    /* Desktop layout */
     .grid-main { display: grid; grid-template-columns: 320px 1fr; gap: 18px; margin-top: 16px; align-items: start; }
-
-    /* Tablet small */
     @media (max-width: 700px) and (min-width: 421px) {
       .grid-main { grid-template-columns: 1fr 300px; gap: 12px; }
       .left { order: 2; }
@@ -33,32 +28,28 @@
       .chartWrap { height: 300px !important; }
       canvas#ohlcChart { height: 300px !important; }
     }
-
-    /* Mobile strict: two columns side-by-side even on narrow phones */
     @media (max-width: 420px) {
       .grid-main { grid-template-columns: minmax(140px, 1fr) 160px; gap: 8px; }
       .left { order: 2; }
       .mainSection { order: 1; }
       .chartWrap { height: 220px !important; }
       canvas#ohlcChart { height: 220px !important; }
-      #app { overflow-x: auto; } /* allow horizontal pan if needed */
+      #app { overflow-x: auto; }
     }
-
     .card { background: #fff; border: 1px solid #eef6fb; border-radius: 10px; padding: 12px; }
     .chartWrap { height: 420px; position: relative; }
     .newsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
     .postsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-
     .meta { color: #6b7b8c; }
     .loading { opacity: 0.6; }
     .pulse { animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%{opacity:1} 50%{opacity:0.5} 100%{opacity:1} }
-
-    /* Make sure canvas doesn't collapse */
     canvas#ohlcChart { width: 100% !important; display: block; }
     .card-border { border: 1px solid #e6eef6; }
-    /* zoom slider styling */
     .zoom-slider { width: 180px; }
+    .ws-status { font-size: 0.75rem; color: #6b7b8c; }
+    .ws-status.connected { color: #00cc00; }
+    .ws-status.disconnected { color: #d32f2f; }
   </style>
 </head>
 <body>
@@ -71,7 +62,6 @@
           <div class="text-sm meta">Real-time candlesticks, indicators, trade advisories & market news</div>
         </div>
       </div>
-
       <div class="flex items-center gap-3">
         <input id="globalSearch" placeholder="Symbol e.g. AAPL, TSLA, BTC, EURUSD" class="px-3 py-2 rounded-lg border card-border text-sm focus:outline-none" />
         <button id="loadBtn" class="px-3 py-2 rounded-lg bg-sky-600 text-white text-sm hover:bg-sky-700">Load</button>
@@ -79,59 +69,48 @@
     </div>
 
     <main class="grid-main">
-      <!-- aside: watchlist + widgets -->
       <aside class="left flex flex-col gap-4">
         <div class="card">
           <h4>Watchlist</h4>
           <div id="watchlist">Loading…</div>
           <div class="mt-2"><small class="meta">Tip: Add any global ticker (US/EU/Asia). For forex use EURUSD, for crypto use BTC, ETH etc.</small></div>
         </div>
-
         <div class="card">
           <h4>Trade Advisories</h4>
           <div id="advisories" class="advice">Loading advisories…</div>
         </div>
-
         <div class="card">
           <h4>Crypto Suggestions</h4>
           <div id="cryptoAdvice" class="advice">Loading crypto suggestions…</div>
         </div>
       </aside>
-
-      <!-- main section: chart, news, posts -->
       <section class="mainSection">
         <div class="card chartCard">
           <div class="chartToolbar flex items-center gap-3 flex-wrap">
             <div><strong id="chartTitle">Select a symbol</strong></div>
             <div style="margin-left:auto" class="meta">Updated: <span id="chartUpdated">—</span></div>
-
+            <div class="ws-status" id="wsStatus">WebSocket: Connecting...</div>
             <div id="timeRange" class="flex gap-2"></div>
             <div id="chartType" class="flex gap-2"></div>
-
             <select id="indicatorSelect" class="indicatorSelect ml-2 px-3 py-1 border rounded-lg card-border text-sm">
               <option value="none">MA: None</option>
               <option value="ma10">MA10</option>
               <option value="ma20">MA20</option>
               <option value="ma50">MA50</option>
             </select>
-
-            <!-- zoom slider -->
             <div class="ml-2 flex items-center gap-2">
               <label class="text-xs meta">Zoom</label>
               <input id="zoomSlider" class="zoom-slider" type="range" min="1" max="100" value="100" />
             </div>
           </div>
-
           <div class="chartWrap mt-3 rounded-lg overflow-hidden bg-slate-50 p-3">
             <canvas id="ohlcChart" aria-label="OHLC candlestick chart"></canvas>
           </div>
-
           <div style="margin-top:12px">
             <strong>Market News</strong>
             <div class="newsGrid" id="newsGrid">Loading news…</div>
           </div>
         </div>
-
         <div class="card mt-3">
           <h4 style="margin-top:0">Market Watch Posts</h4>
           <div class="postsGrid" id="postsArea">Loading posts…</div>
@@ -144,7 +123,6 @@
         <div class="font-semibold">Market Pulse</div>
         <div class="meta">Real Markets Data and Analysis Dashboard by JDG Team</div>
       </div>
-
       <div class="contact card" style="width:360px">
         <strong>Contact</strong>
         <div class="meta">Messages will be prepared for: <strong>wambuamwanza6@gmail.com</strong></div>
@@ -158,7 +136,6 @@
   </div>
 
   <script>
-    // === PRESERVE original variables & caching ===
     const ALPHA_VANTAGE_API_KEY = 'INZ7GV3B33PXV2QM';
     let lastNewsUpdate = 0;
     let lastCryptoUpdate = 0;
@@ -193,7 +170,6 @@
       document.querySelectorAll('.viewBtn').forEach(btn => { btn.addEventListener('click', () => loadSymbol(btn.dataset.sym)); });
     }
 
-    // Crypto helpers
     async function fetchCryptoMarketsFast() {
       const cacheKey = 'crypto_markets_fast';
       const cached = dataCache.get(cacheKey);
@@ -223,12 +199,10 @@
           })).slice(0, 10);
         }
       } catch (error) { console.log('Binance API failed, trying CoinGecko...'); }
-
       try {
         const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false&price_change_percentage=24h');
         if (response.ok) { return await response.json(); }
       } catch (error) { console.log('CoinGecko failed, trying CoinCap...'); }
-
       try {
         const response = await fetch('https://api.coincap.io/v2/assets?limit=10');
         if (response.ok) {
@@ -241,7 +215,6 @@
           }));
         }
       } catch (error) { console.log('CoinCap failed, using fallback data'); }
-
       throw new Error('All crypto APIs failed');
     }
 
@@ -294,7 +267,6 @@
         else if (change > 3) { recommendation = 'Bullish - Monitor'; recommendationColor = '#00cc00'; }
         else if (change < -8) { recommendation = 'Potential Buying Opportunity'; recommendationColor = '#00cc00'; }
         else if (change < -3) { recommendation = 'Bearish - Caution'; recommendationColor = '#d32f2f'; }
-
         return `
           <div class="py-2 border-b border-slate-100">
             <div class="flex justify-between items-center">
@@ -306,7 +278,6 @@
           </div>
         `;
       });
-
       cryptoAdviceEl.innerHTML = `
         <div class="text-xs text-sky-600 text-right mb-2">Updated: ${new Date().toLocaleTimeString()}</div>
         ${nodes.join('')}
@@ -327,7 +298,6 @@
       const cacheKey = `stock_${symbol}_${range}`;
       const cached = dataCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) return cached.data;
-
       try {
         const ranges = { '1D':'1d','1W':'5d','1M':'1mo','3M':'3mo','1Y':'1y' };
         const yahooRange = ranges[range] || '1d';
@@ -336,17 +306,13 @@
         const proxyUrl = 'https://api.allorigins.win/raw?url=';
         const response = await fetchWithTimeout(proxyUrl + encodeURIComponent(yahooUrl), 5000);
         const data = await response.json();
-
         if (!data.chart?.result?.[0]) throw new Error('No chart data from Yahoo');
-
         const result = data.chart.result[0];
         const quotes = result.indicators.quote[0];
         const timestamps = result.timestamp;
         if (!timestamps || timestamps.length === 0) throw new Error('No timestamp data');
-
         const ohlc = timestamps.map((t, i) => ({ t: t * 1000, o: quotes.open[i] || quotes.close[i] || 0, h: quotes.high[i] || quotes.close[i] || 0, l: quotes.low[i] || quotes.close[i] || 0, c: quotes.close[i] || 0 })).filter(d => d.c > 0 && d.o > 0);
         const resultData = { ohlc, last: timestamps.length ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : null };
-
         dataCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         return resultData;
       } catch (error) {
@@ -357,11 +323,9 @@
           const url = `https://www.alphavantage.co/query?function=${functionName}&symbol=${symbol}&interval=${interval}&apikey=${ALPHA_VANTAGE_API_KEY}&outputsize=compact`;
           const response = await fetchWithTimeout(url, 5000);
           const data = await response.json();
-
           let timeSeries;
           if (range === '1D') timeSeries = data['Time Series (5min)']; else timeSeries = data['Time Series (Daily)'];
           if (!timeSeries) throw new Error('No time series data available');
-
           const ohlc = [];
           const dates = Object.keys(timeSeries).sort();
           for (const date of dates) {
@@ -398,32 +362,51 @@
       }
     }
 
-    // === Updated WebSocket Connection Management ===
+    // === Updated WebSocket Logic for Real-Time Updates ===
     let binanceWS = null;
-    let binanceSubscribed = new Set(); // Holds stream names (e.g., 'btcusdt@trade')
-    let liveSymbols = []; // e.g., ['BTC', 'ETH']
+    let binanceSubscribed = new Set();
+    let liveSymbols = [];
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
-    const BASE_RECONNECT_DELAY = 1000; // 1 second
-    const MAX_STREAMS = 5; // Limit to 5 streams to prevent overload
+    const BASE_RECONNECT_DELAY = 1000;
+    const MAX_STREAMS = 5;
+    let lastUpdateTime = 0;
+    const UPDATE_INTERVAL = 1000; // Update chart every 1 second
 
     function binanceStreamNameFor(sym) {
-      return (sym + 'usdt').toLowerCase() + '@trade';
+      return (sym + 'usdt').toLowerCase() + '@kline_1s'; // Use 1-second candlestick stream
+    }
+
+    function updateWebSocketStatus(status) {
+      const wsStatusEl = $('wsStatus');
+      if (status === 'connected') {
+        wsStatusEl.textContent = 'WebSocket: Connected';
+        wsStatusEl.classList.remove('disconnected');
+        wsStatusEl.classList.add('connected');
+      } else if (status === 'disconnected') {
+        wsStatusEl.textContent = 'WebSocket: Disconnected';
+        wsStatusEl.classList.remove('connected');
+        wsStatusEl.classList.add('disconnected');
+      } else {
+        wsStatusEl.textContent = `WebSocket: ${status}`;
+        wsStatusEl.classList.remove('connected', 'disconnected');
+      }
     }
 
     function openBinanceWS() {
       if (binanceWS && binanceWS.readyState === WebSocket.OPEN) return;
 
-      // Close existing connection if any
       if (binanceWS) {
         try { binanceWS.close(); } catch (e) {}
       }
 
       binanceWS = new WebSocket('wss://stream.binance.com:9443/ws');
+      updateWebSocketStatus('Connecting...');
+
       binanceWS.onopen = () => {
         console.log('Binance WebSocket opened');
-        reconnectAttempts = 0; // Reset on successful connection
-        // Resubscribe to existing streams
+        reconnectAttempts = 0;
+        updateWebSocketStatus('connected');
         if (binanceSubscribed.size > 0) {
           subscribeToStreams(Array.from(binanceSubscribed));
         }
@@ -432,12 +415,12 @@
       binanceWS.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          // Handle both single stream and combined stream messages
-          const data = msg.data || msg;
-          if (data && data.p && data.s) {
-            const price = parseFloat(data.p);
-            const symbol = data.s.replace('USDT', '').toUpperCase();
+          if (msg && msg.k && msg.s) {
+            const price = parseFloat(msg.k.c); // Close price from 1s candlestick
+            const symbol = msg.s.replace('USDT', '').toUpperCase();
             handleBinanceTrade(symbol, price);
+          } else {
+            console.warn('Unexpected WebSocket message format:', msg);
           }
         } catch (e) {
           console.error('WebSocket message parse error:', e);
@@ -446,21 +429,23 @@
 
       binanceWS.onerror = (err) => {
         console.error('Binance WebSocket error:', err);
+        updateWebSocketStatus('Error');
       };
 
       binanceWS.onclose = () => {
         console.log('Binance WebSocket closed');
+        updateWebSocketStatus('disconnected');
         if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts);
-          console.log(`Attempting to reconnect in ${delay}ms... (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+          console.log(`Reconnecting in ${delay}ms... (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
           setTimeout(() => {
             reconnectAttempts++;
             openBinanceWS();
           }, delay);
         } else {
-          console.error('Max reconnect attempts reached. WebSocket updates paused.');
-          // Notify user (optional)
-          $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live crypto updates paused. Please refresh the page.</div>';
+          console.error('Max reconnect attempts reached.');
+          updateWebSocketStatus('Disconnected (Max retries reached)');
+          $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live updates paused. Please refresh the page.</div>';
         }
       };
     }
@@ -484,6 +469,7 @@
         streams.forEach(stream => binanceSubscribed.add(stream));
       } catch (e) {
         console.error('Error subscribing to streams:', e);
+        updateWebSocketStatus('Subscription error');
       }
     }
 
@@ -507,76 +493,79 @@
     function subscribeBinanceStreams(symbols) {
       if (!symbols || symbols.length === 0) return;
 
-      // Limit to MAX_STREAMS
       const validSymbols = Array.from(new Set(symbols)).slice(0, MAX_STREAMS);
       const newStreams = validSymbols.map(binanceStreamNameFor);
       const currentStreams = Array.from(binanceSubscribed);
       const streamsToSubscribe = newStreams.filter(s => !binanceSubscribed.has(s));
       const streamsToUnsubscribe = currentStreams.filter(s => !newStreams.includes(s));
 
-      // Update liveSymbols
       liveSymbols = validSymbols;
 
-      // Unsubscribe from streams no longer needed
       if (streamsToUnsubscribe.length > 0) {
         unsubscribeFromStreams(streamsToUnsubscribe);
       }
-
-      // Subscribe to new streams
       if (streamsToSubscribe.length > 0) {
         subscribeToStreams(streamsToSubscribe);
       }
     }
 
-    // Live price buffer for overlay / animation
-    const liveBuffers = {}; // { 'BTC': [ {x:ts, y:price}, ... ] }
+    const liveBuffers = {};
+    let pendingUpdates = false;
     function handleBinanceTrade(symbol, price) {
-      if (!symbol) return;
+      if (!symbol || isNaN(price)) return;
       const now = Date.now();
       if (!liveBuffers[symbol]) liveBuffers[symbol] = [];
       liveBuffers[symbol].push({ x: now, y: price });
-      // Keep last 120 points per symbol
-      if (liveBuffers[symbol].length > 120) liveBuffers[symbol].shift();
+      if (liveBuffers[symbol].length > 300) liveBuffers[symbol].shift(); // Keep 5 minutes of 1s data
 
-      // If current chart is showing this symbol, update live series
-      if (currentSymbol === symbol && ohlcChart) {
-        const liveLabel = `LIVE: ${symbol}`;
-        const dsIndex = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
-        const currentPoint = { x: now, y: price };
-        if (dsIndex === -1) {
-          ohlcChart.data.datasets.push({
-            label: liveLabel,
-            data: liveBuffers[symbol].slice(-60),
-            type: 'line',
-            borderColor: '#ff4d4d',
-            backgroundColor: 'rgba(255,77,77,0.08)',
-            tension: 0.2,
-            pointRadius: 0,
-            borderWidth: 2,
-            yAxisID: 'y'
-          });
-        } else {
-          const ds = ohlcChart.data.datasets[dsIndex];
-          ds.data.push(currentPoint);
-          if (ds.data.length > 120) ds.data.shift();
-        }
-        try {
-          ohlcChart.update('mixed');
-        } catch (e) {
-          ohlcChart.update();
-        }
+      if (currentSymbol === symbol && ohlcChart && !pendingUpdates) {
+        pendingUpdates = true;
+        requestAnimationFrame(() => {
+          updateChartLiveData(symbol);
+          pendingUpdates = false;
+        });
       }
     }
 
-    // Chart rendering
+    function updateChartLiveData(symbol) {
+      if (!ohlcChart || currentSymbol !== symbol) return;
+      const now = Date.now();
+      if (now - lastUpdateTime < UPDATE_INTERVAL) return;
+      lastUpdateTime = now;
+
+      const liveLabel = `LIVE: ${symbol}`;
+      const dsIndex = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
+      const liveData = liveBuffers[symbol].slice(-60); // Show last 60 seconds
+
+      if (dsIndex === -1) {
+        ohlcChart.data.datasets.push({
+          label: liveLabel,
+          data: liveData,
+          type: 'line',
+          borderColor: '#ff4d4d',
+          backgroundColor: 'rgba(255,77,77,0.08)',
+          tension: 0.2,
+          pointRadius: 0,
+          borderWidth: 2,
+          yAxisID: 'y'
+        });
+      } else {
+        ohlcChart.data.datasets[dsIndex].data = liveData;
+      }
+
+      try {
+        ohlcChart.update('none'); // Fast update without animation
+      } catch (e) {
+        console.error('Chart update error:', e);
+      }
+    }
+
     function renderChart(ohlc, label) {
       const canvas = $('ohlcChart');
       const ctx = canvas.getContext('2d');
-
       if (ohlcChart) {
         try { ohlcChart.destroy(); } catch(e){}
       }
-
       if (!ohlc || ohlc.length === 0) {
         ctx.clearRect(0,0,canvas.width,canvas.height);
         ctx.font = '16px Arial';
@@ -587,7 +576,6 @@
       }
 
       const ohlcData = ohlc.map(d => ({ x: d.t, o: d.o, h: d.h, l: d.l, c: d.c }));
-
       const datasets = [];
       if (currentChartType === 'candlestick') {
         datasets.push({
@@ -650,7 +638,7 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          animation: { duration: 300, easing: 'linear' },
+          animation: false, // Disable animations for faster updates
           plugins: {
             legend: { display: true, position: 'top' },
             tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size:12 }, bodyFont: { size:12 }, padding: 10 },
@@ -660,15 +648,21 @@
             }
           },
           scales: {
-            x: { type: 'time', time: { unit: currentRange === '1D' ? 'hour' : 'day', displayFormats: { hour:'HH:mm', day:'MMM dd' } }, grid: { color:'rgba(0,0,0,0.04)' }, ticks: { maxTicksLimit: 8 } },
-            y: { beginAtZero: false, grid: { color:'rgba(0,0,0,0.04)' }, ticks: { callback: function(value){ return '$' + value.toFixed(2); } } }
+            x: { 
+              type: 'time', 
+              time: { unit: currentRange === '1D' ? 'second' : 'day', displayFormats: { second: 'HH:mm:ss', day: 'MMM dd' } }, 
+              grid: { color: 'rgba(0,0,0,0.04)' }, 
+              ticks: { maxTicksLimit: 8 },
+              min: liveBuffer && liveBuffer.length > 0 ? liveBuffer[0].x : undefined,
+              max: liveBuffer && liveBuffer.length > 0 ? liveBuffer[liveBuffer.length - 1].x : undefined
+            },
+            y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { callback: function(value) { return '$' + value.toFixed(2); } } }
           }
         }
       };
 
       try { ohlcChart = new Chart(ctx, config); }
       catch (e) { console.error('Chart render error:', e); }
-
       applyZoomFromSlider();
     }
 
@@ -681,7 +675,6 @@
       return res;
     }
 
-    // News
     async function loadNews() {
       const now = Date.now();
       if (now - lastNewsUpdate < NEWS_UPDATE_INTERVAL && $('newsGrid').children.length > 1) return;
@@ -689,14 +682,13 @@
       lastNewsUpdate = now;
       try {
         const fallbackNews = [
-          { title: 'Global Markets Show Resilience Amid Economic Shifts', summary: 'Major indices demonstrate strength as investors adapt to new market conditions.', image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop', url:'#', date: new Date().toISOString() },
-          { title: 'Tech Sector Leads Market Recovery in Q4', summary: 'Technology stocks show strong performance driven by AI and cloud computing growth.', image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop', url:'#', date: new Date(Date.now()-86400000).toISOString() },
-          { title: 'Cryptocurrency Market Experiences Volatility', summary: 'Digital assets fluctuate as regulatory developments impact investor sentiment.', image: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=600&h=400&fit=crop', url:'#', date: new Date(Date.now()-172800000).toISOString() },
-          { title: 'Federal Reserve Maintains Interest Rate Policy', summary: 'Central bank holds steady on rates amid stable inflation indicators.', image: 'https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=600&h=400&fit=crop', url:'#', date: new Date(Date.now()-259200000).toISOString() },
-          { title: 'Energy Sector Benefits from Supply Adjustments', summary: 'Oil and gas companies see gains as production levels stabilize.', image: 'https://images.unsplash.com/photo-1504893524553-b855bceeacef?w=600&h=400&fit=crop', url:'#', date: new Date(Date.now()-345600000).toISOString() },
-          { title: 'Emerging Markets Offer Growth Opportunities', summary: 'Developing economies present attractive investment prospects for 2024.', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop', url:'#', date: new Date(Date.now()-432000000).toISOString() }
+          { title: 'Global Markets Show Resilience Amid Economic Shifts', summary: 'Major indices demonstrate strength as investors adapt to new market conditions.', image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=400&fit=crop', url: '#', date: new Date().toISOString() },
+          { title: 'Tech Sector Leads Market Recovery in Q4', summary: 'Technology stocks show strong performance driven by AI and cloud computing growth.', image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now()-86400000).toISOString() },
+          { title: 'Cryptocurrency Market Experiences Volatility', summary: 'Digital assets fluctuate as regulatory developments impact investor sentiment.', image: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now()-172800000).toISOString() },
+          { title: 'Federal Reserve Maintains Interest Rate Policy', summary: 'Central bank holds steady on rates amid stable inflation indicators.', image: 'https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now()-259200000).toISOString() },
+          { title: 'Energy Sector Benefits from Supply Adjustments', summary: 'Oil and gas companies see gains as production levels stabilize.', image: 'https://images.unsplash.com/photo-1504893524553-b855bceeacef?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now()-345600000).toISOString() },
+          { title: 'Emerging Markets Offer Growth Opportunities', summary: 'Developing economies present attractive investment prospects for 2024.', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop', url: '#', date: new Date(Date.now()-432000000).toISOString() }
         ];
-
         const newsItems = fallbackNews.slice(0, 6);
         const newsGrid = $('newsGrid');
         newsGrid.innerHTML = newsItems.map(item => {
@@ -719,16 +711,15 @@
       }
     }
 
-    // Trading analysis
     function computeSignalsFromOHLC(ohlc) {
-      if (!ohlc || ohlc.length < 20) return { recommendation:'Hold', reason:'Insufficient data for analysis' };
+      if (!ohlc || ohlc.length < 20) return { recommendation: 'Hold', reason: 'Insufficient data for analysis' };
       const closes = ohlc.map(d => d.c).filter(c => c > 0);
       const ma10 = simpleMovingAverage(closes, 10);
       const ma50 = simpleMovingAverage(closes, 50);
       const currentMA10 = ma10[ma10.length - 1];
       const currentMA50 = ma50[ma50.length - 1];
       const currentPrice = closes[closes.length - 1];
-      const signal = { recommendation:'Hold', reason:'No clear trend detected' };
+      const signal = { recommendation: 'Hold', reason: 'No clear trend detected' };
       if (currentMA10 > currentMA50 && currentPrice > currentMA10) { signal.recommendation = 'Buy'; signal.reason = 'Bullish trend: Price above MA10 and MA10 above MA50'; }
       else if (currentMA10 < currentMA50 && currentPrice < currentMA10) { signal.recommendation = 'Sell'; signal.reason = 'Bearish trend: Price below MA10 and MA10 below MA50'; }
       const shortTermMomentum = ((currentPrice - closes[closes.length - 5]) / closes[closes.length - 5]) * 100;
@@ -749,7 +740,6 @@
       `;
     }
 
-    // Posts
     async function loadPosts() {
       const watchlist = getWatch().slice(0,9);
       const postsArea = $('postsArea');
@@ -777,7 +767,6 @@
       }
     }
 
-    // MAIN: loadSymbol
     async function loadSymbol(symbol, range = '1D') {
       if (!symbol || symbol.trim() === '') return;
       currentSymbol = symbol.toUpperCase().trim();
@@ -791,13 +780,16 @@
         let data;
         if (['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol)) {
           data = await fetchCryptoData(currentSymbol);
-          // Subscribe to Binance WebSocket for live updates
           const watchlist = getWatch();
           const toSubscribe = Array.from(new Set([currentSymbol].concat(watchlist.slice(0, MAX_STREAMS - 1))));
           liveSymbols = toSubscribe.filter(s => s && s.length > 0);
           subscribeBinanceStreams(liveSymbols);
         } else {
           data = await fetchStockData(currentSymbol, range);
+          // Unsubscribe from all streams if a non-crypto symbol is selected
+          if (binanceSubscribed.size > 0) {
+            unsubscribeFromStreams(Array.from(binanceSubscribed));
+          }
         }
 
         liveBuffers[currentSymbol] = liveBuffers[currentSymbol] || [];
@@ -815,7 +807,6 @@
       }
     }
 
-    // Zoom slider
     function applyZoomFromSlider() {
       const slider = $('zoomSlider');
       if (!ohlcChart || !slider) return;
@@ -831,7 +822,7 @@
       try {
         ohlcChart.options.scales.x.min = minT;
         ohlcChart.options.scales.x.max = maxT;
-        ohlcChart.update();
+        ohlcChart.update('none');
       } catch (e) {
         console.error('applyZoom error', e);
       }
@@ -841,11 +832,9 @@
       if (e.target && e.target.id === 'zoomSlider') applyZoomFromSlider();
     });
 
-    // INIT / setup UI controls
     async function loadAll() {
       renderWatch();
-      await Promise.allSettled([ loadCryptoAdvice(), loadNews(), loadPosts() ]);
-
+      await Promise.allSettled([loadCryptoAdvice(), loadNews(), loadPosts()]);
       const ranges = ['1D','1W','1M','3M','1Y'];
       const timeRangeDiv = $('timeRange');
       timeRangeDiv.innerHTML = ranges.map(range => `<button class="px-2 py-1 rounded text-xs ${range === '1D' ? 'bg-sky-600 text-white' : 'bg-slate-100'}" data-range="${range}">${range}</button>`).join('');
@@ -857,7 +846,7 @@
         });
       });
 
-      const chartTypes = [{ type:'candlestick', label:'Candlestick' },{ type:'line', label:'Line' },{ type:'bar', label:'Bar' }];
+      const chartTypes = [{ type: 'candlestick', label: 'Candlestick' }, { type: 'line', label: 'Line' }, { type: 'bar', label: 'Bar' }];
       const chartTypeDiv = $('chartType');
       chartTypeDiv.innerHTML = chartTypes.map(({type,label}) => `<button class="px-2 py-1 rounded text-xs ${type === 'candlestick' ? 'bg-slate-200' : 'bg-slate-100'}" data-type="${type}">${label}</button>`).join('');
       chartTypeDiv.querySelectorAll('button').forEach(btn => {
@@ -881,7 +870,6 @@
       if (firstSymbol) loadSymbol(firstSymbol);
     }
 
-    // Event handlers
     $('loadBtn').addEventListener('click', () => {
       const symbol = $('globalSearch').value.trim();
       if (!symbol) { alert('Please enter a symbol'); return; }
@@ -902,7 +890,6 @@
       $('sendStatus').textContent = 'Opening email client...';
     });
 
-    // Periodic updates & initialization
     document.addEventListener('DOMContentLoaded', () => {
       loadAll();
       setInterval(() => {
