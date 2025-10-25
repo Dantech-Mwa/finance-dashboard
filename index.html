@@ -146,6 +146,12 @@
     let currentChartType = 'candlestick';
     let currentIndicator = 'none';
     let ohlcChart = null;
+    let binanceWS = null;
+    let currentBucket = null;
+    let liveLineBuffer = [];
+    const MAX_POINTS = 60; // 60 seconds of data
+    const LIVE_LINE_MAX = 300; // 5 minutes for live line overlay
+    let useFallbackData = false;
 
     const $ = id => document.getElementById(id);
     const dataCache = new Map();
@@ -156,6 +162,234 @@
       catch (e) { return ['AAPL','MSFT','GOOGL','TSLA','BTC']; }
     }
     function saveWatch(a) { localStorage.setItem('mp_watch', JSON.stringify(a)); }
+
+    function updateWebSocketStatus(status, error = '') {
+      const wsStatusEl = $('wsStatus');
+      if (status === 'connected') {
+        wsStatusEl.textContent = 'WebSocket: Connected';
+        wsStatusEl.classList.remove('disconnected');
+        wsStatusEl.classList.add('connected');
+      } else if (status === 'disconnected') {
+        wsStatusEl.textContent = `WebSocket: Disconnected${error ? ' - ' + error : ''}`;
+        wsStatusEl.classList.remove('connected');
+        wsStatusEl.classList.add('disconnected');
+      } else {
+        wsStatusEl.textContent = `WebSocket: ${status}${error ? ' - ' + error : ''}`;
+        wsStatusEl.classList.remove('connected', 'disconnected');
+      }
+    }
+
+    // Live WebSocket: per-trade stream, per-second candle bucketing
+    function connectBinance(symbol) {
+      if (!symbol) return;
+      if (binanceWS) try { binanceWS.close(); } catch(e) {}
+      const lower = symbol.toLowerCase();
+      const url = `wss://stream.binance.com:9443/ws/${lower}@trade`;
+      try {
+        binanceWS = new WebSocket(url);
+        updateWebSocketStatus('Connecting...');
+      } catch (e) {
+        console.error('WS connect error', e);
+        updateWebSocketStatus('disconnected', 'Connection failed');
+        useFallbackData = true;
+        startFallbackData(symbol);
+        return;
+      }
+
+      binanceWS.onopen = () => {
+        console.log('Binance WS open for', symbol);
+        updateWebSocketStatus('connected');
+        useFallbackData = false;
+        stopFallbackData();
+      };
+
+      binanceWS.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          const price = parseFloat(msg.p);
+          const ts = msg.T || Date.now();
+          handleLiveTick(price, ts);
+        } catch (e) {
+          console.error('WS message error', e);
+        }
+      };
+
+      binanceWS.onerror = (err) => {
+        console.error('Binance WS error', err);
+        updateWebSocketStatus('disconnected', 'Connection error');
+      };
+
+      binanceWS.onclose = () => {
+        console.warn('Binance WS closed; reconnecting in 2s');
+        updateWebSocketStatus('disconnected', 'Reconnecting...');
+        setTimeout(() => connectBinance(symbol), 2000);
+      };
+    }
+
+    function handleLiveTick(price, ts) {
+      if (!ohlcChart || !currentSymbol) return;
+      const sec = Math.floor(ts / 1000) * 1000;
+      if (!currentBucket || currentBucket.t !== sec) {
+        currentBucket = { t: sec, o: price, h: price, l: price, c: price };
+        if (currentChartType === 'candlestick') {
+          const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+          if (ds) {
+            ds.data.push({ x: currentBucket.t, o: currentBucket.o, h: currentBucket.h, l: currentBucket.l, c: currentBucket.c });
+            if (ds.data.length > MAX_POINTS) ds.data.shift();
+          } else {
+            const d0 = ohlcChart.data.datasets[0];
+            d0.data.push({ x: ts, y: price });
+            if (d0.data.length > MAX_POINTS) d0.data.shift();
+          }
+        } else {
+          const d0 = ohlcChart.data.datasets[0] || (ohlcChart.data.datasets[0] = { 
+            label: currentSymbol, 
+            data: [], 
+            type: currentChartType, 
+            borderColor: '#0b76d1', 
+            backgroundColor: currentChartType === 'bar' ? 'rgba(11,118,209,0.6)' : 'rgba(11,118,209,0.1)', 
+            fill: currentChartType !== 'bar', 
+            tension: 0.4, 
+            pointRadius: 0, 
+            borderWidth: 2 
+          });
+          d0.data.push({ x: ts, y: price });
+          if (d0.data.length > MAX_POINTS) d0.data.shift();
+        }
+      } else {
+        currentBucket.h = Math.max(currentBucket.h, price);
+        currentBucket.l = Math.min(currentBucket.l, price);
+        currentBucket.c = price;
+        if (currentChartType === 'candlestick') {
+          const ds = ohlcChart.data.datasets.find(d => d.type === 'candlestick');
+          if (ds && ds.data.length) {
+            const last = ds.data[ds.data.length - 1];
+            last.h = Math.max(last.h, price);
+            last.l = Math.min(last.l, price);
+            last.c = price;
+          }
+        } else {
+          const d0 = ohlcChart.data.datasets[0];
+          if (d0 && d0.data.length) d0.data[d0.data.length - 1].y = price;
+        }
+      }
+
+      liveLineBuffer.push({ x: ts, y: price });
+      if (liveLineBuffer.length > LIVE_LINE_MAX) liveLineBuffer.shift();
+
+      const liveLabel = `LIVE: ${currentSymbol}`;
+      let liveIdx = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
+      const livePoints = liveLineBuffer.slice(-LIVE_LINE_MAX);
+      if (liveIdx === -1) {
+        ohlcChart.data.datasets.push({
+          label: liveLabel,
+          data: livePoints,
+          type: 'line',
+          borderColor: '#ff4d4d',
+          backgroundColor: 'rgba(255,77,77,0.06)',
+          pointRadius: 0,
+          borderWidth: 1.2,
+          tension: 0.15,
+          yAxisID: 'y'
+        });
+      } else {
+        ohlcChart.data.datasets[liveIdx].data = livePoints;
+      }
+
+      const cndIdx = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
+      if (cndIdx !== -1) {
+        const ds = ohlcChart.data.datasets[cndIdx];
+        if (ds.data.length > MAX_POINTS) ds.data.splice(0, ds.data.length - MAX_POINTS);
+      } else {
+        if (ohlcChart.data.datasets[0] && ohlcChart.data.datasets[0].data.length > MAX_POINTS) {
+          ohlcChart.data.datasets[0].data.splice(0, ohlcChart.data.datasets[0].data.length - MAX_POINTS);
+        }
+      }
+
+      // Update x-axis to keep last 60 seconds
+      if (livePoints.length > 0) {
+        ohlcChart.options.scales.x.min = livePoints[0].x;
+        ohlcChart.options.scales.x.max = livePoints[livePoints.length - 1].x;
+      }
+
+      scheduleIndicatorRecalc();
+      try { ohlcChart.update('none'); } catch (e) { try { ohlcChart.update(); } catch(e) {} }
+    }
+
+    let _indicatorTimer = null;
+    function scheduleIndicatorRecalc() {
+      if (_indicatorTimer) return;
+      _indicatorTimer = setTimeout(() => {
+        _indicatorTimer = null;
+        recalcIndicators();
+      }, 400);
+    }
+
+    function recalcIndicators() {
+      if (!ohlcChart || !currentIndicator || currentIndicator === 'none') return;
+      const cndIdx = ohlcChart.data.datasets.findIndex(d => d.type === 'candlestick');
+      const d0Idx = ohlcChart.data.datasets.findIndex(d => d.label === currentSymbol && (d.type === 'line' || d.type === 'bar'));
+      const closes = (cndIdx !== -1 ? ohlcChart.data.datasets[cndIdx].data : ohlcChart.data.datasets[d0Idx]?.data || []).map(d => d.c || d.y).filter(c => c > 0);
+      if (closes.length < 10) return;
+
+      const n = parseInt(currentIndicator.replace('ma', ''));
+      const ma = simpleMovingAverage(closes, n);
+      const maData = ma.map((v, i) => ({ x: (cndIdx !== -1 ? ohlcChart.data.datasets[cndIdx].data[i] : ohlcChart.data.datasets[d0Idx].data[i]).x, y: v })).filter(d => d.y !== null);
+      const maIdx = ohlcChart.data.datasets.findIndex(d => d.label === `MA${n}`);
+      if (maData.length > 0) {
+        if (maIdx === -1) {
+          ohlcChart.data.datasets.push({
+            label: `MA${n}`,
+            data: maData,
+            type: 'line',
+            borderColor: '#ff7f0e',
+            backgroundColor: 'rgba(255,127,14,0.1)',
+            tension: 0.4,
+            pointRadius: 0,
+            borderWidth: 2
+          });
+        } else {
+          ohlcChart.data.datasets[maIdx].data = maData;
+        }
+      }
+      try { ohlcChart.update('none'); } catch (e) {}
+    }
+
+    // Fallback data simulation
+    function generateFallbackPrice(symbol, lastPrice) {
+      const basePrices = {
+        'BTC': 51000,
+        'ETH': 2900,
+        'BNB': 350,
+        'ADA': 0.52,
+        'SOL': 105,
+        'DOT': 7.2,
+        'DOGE': 0.12,
+        'XRP': 0.58,
+        'LTC': 72,
+        'LINK': 15.8
+      };
+      const basePrice = lastPrice || basePrices[symbol.toUpperCase()] || 100;
+      const change = (Math.random() - 0.5) * basePrice * 0.005;
+      return basePrice + change;
+    }
+
+    let fallbackInterval = null;
+    function startFallbackData(symbol) {
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      fallbackInterval = setInterval(() => {
+        const lastPrice = liveLineBuffer.length > 0 ? liveLineBuffer[liveLineBuffer.length - 1].y : null;
+        handleLiveTick(generateFallbackPrice(symbol, lastPrice), Date.now());
+      }, 1000);
+      $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live updates paused. Using simulated data. Please refresh or try a different network.</div>';
+    }
+
+    function stopFallbackData() {
+      if (fallbackInterval) {
+        clearInterval(fallbackInterval);
+        fallbackInterval = null;
+      }
+    }
 
     function renderWatch() {
       const list = getWatch();
@@ -362,297 +596,23 @@
       }
     }
 
-    // === Updated WebSocket Logic ===
-    let binanceWS = null;
-    let binanceSubscribed = new Set();
-    let liveSymbols = [];
-    let reconnectAttempts = 0;
-    let connectionTimeout = null;
-    let currentEndpointIndex = 0;
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    const BASE_RECONNECT_DELAY = 1000;
-    const MAX_STREAMS = 5;
-    const CONNECTION_TIMEOUT = 5000; // 5 seconds
-    let useFallbackData = false;
-    let pingInterval = null;
-    const WEBSOCKET_ENDPOINTS = [
-      'wss://stream.binance.com:9443/ws',
-      'wss://ws-api.binance.com:443/ws-api/v3'
-    ];
-
-    function binanceStreamNameFor(sym) {
-      return (sym + 'usdt').toLowerCase() + '@kline_1s';
-    }
-
-    function updateWebSocketStatus(status, error = '') {
-      const wsStatusEl = $('wsStatus');
-      if (status === 'connected') {
-        wsStatusEl.textContent = 'WebSocket: Connected';
-        wsStatusEl.classList.remove('disconnected');
-        wsStatusEl.classList.add('connected');
-      } else if (status === 'disconnected') {
-        wsStatusEl.textContent = `WebSocket: Disconnected${error ? ' - ' + error : ''}`;
-        wsStatusEl.classList.remove('connected');
-        wsStatusEl.classList.add('disconnected');
-      } else {
-        wsStatusEl.textContent = `WebSocket: ${status}${error ? ' - ' + error : ''}`;
-        wsStatusEl.classList.remove('connected', 'disconnected');
+    function simpleMovingAverage(arr, n) {
+      const res = [];
+      for (let i = 0; i < arr.length; i++) {
+        if (i < n - 1) res.push(null);
+        else { let sum = 0; for (let j = 0; j < n; j++) sum += arr[i - j] || 0; res.push(sum / n); }
       }
-    }
-
-    function openBinanceWS() {
-      if (binanceWS && binanceWS.readyState === WebSocket.OPEN) return;
-
-      if (binanceWS) {
-        try { binanceWS.close(); } catch (e) {}
-      }
-
-      const endpoint = WEBSOCKET_ENDPOINTS[currentEndpointIndex];
-      console.log(`Attempting to connect to ${endpoint} (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
-      binanceWS = new WebSocket(endpoint);
-      updateWebSocketStatus('Connecting...', `Using ${endpoint}`);
-
-      // Set connection timeout
-      connectionTimeout = setTimeout(() => {
-        if (binanceWS.readyState !== WebSocket.OPEN) {
-          console.error(`WebSocket connection to ${endpoint} timed out`);
-          updateWebSocketStatus('disconnected', 'Connection timed out');
-          binanceWS.close();
-        }
-      }, CONNECTION_TIMEOUT);
-
-      binanceWS.onopen = () => {
-        clearTimeout(connectionTimeout);
-        clearInterval(pingInterval);
-        console.log(`Binance WebSocket opened: ${endpoint}`);
-        reconnectAttempts = 0;
-        currentEndpointIndex = 0; // Reset to primary endpoint on success
-        useFallbackData = false;
-        updateWebSocketStatus('connected');
-        // Start ping/pong to keep connection alive
-        pingInterval = setInterval(() => {
-          if (binanceWS.readyState === WebSocket.OPEN) {
-            binanceWS.send(JSON.stringify({ method: 'PING' }));
-          }
-        }, 30000);
-        if (binanceSubscribed.size > 0) {
-          subscribeToStreams(Array.from(binanceSubscribed));
-        }
-      };
-
-      binanceWS.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data);
-          if (msg && msg.k && msg.s) {
-            const price = parseFloat(msg.k.c);
-            const symbol = msg.s.replace('USDT', '').toUpperCase();
-            handleBinanceTrade(symbol, price);
-          } else if (msg.result === null && msg.id) {
-            console.log('Subscription confirmed:', msg.id);
-          } else if (msg.pong) {
-            console.log('Received PONG from server');
-          } else {
-            console.warn('Unexpected WebSocket message:', msg);
-          }
-        } catch (e) {
-          console.error('WebSocket message parse error:', e);
-          updateWebSocketStatus('connected', 'Message parse error');
-        }
-      };
-
-      binanceWS.onerror = (err) => {
-        clearTimeout(connectionTimeout);
-        console.error(`Binance WebSocket error on ${endpoint}:`, err);
-        updateWebSocketStatus('disconnected', 'Connection error');
-      };
-
-      binanceWS.onclose = () => {
-        clearTimeout(connectionTimeout);
-        clearInterval(pingInterval);
-        console.log(`Binance WebSocket closed: ${endpoint}`);
-        updateWebSocketStatus('disconnected');
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          reconnectAttempts++;
-          const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1);
-          console.log(`Reconnecting in ${delay}ms... (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-          setTimeout(() => {
-            if (reconnectAttempts === MAX_RECONNECT_ATTEMPTS) {
-              currentEndpointIndex = (currentEndpointIndex + 1) % WEBSOCKET_ENDPOINTS.length;
-              console.log(`Switching to endpoint: ${WEBSOCKET_ENDPOINTS[currentEndpointIndex]}`);
-              reconnectAttempts = 0; // Reset attempts for new endpoint
-            }
-            openBinanceWS();
-          }, delay);
-        } else {
-          console.error('Max reconnect attempts reached. Switching to fallback data.');
-          updateWebSocketStatus('disconnected', 'Max retries reached');
-          useFallbackData = true;
-          startFallbackData();
-          $('advisories').innerHTML += '<div class="text-red-600 text-sm mt-2">Live updates paused. Using simulated data. Please refresh or try a different network.</div>';
-        }
-      };
-    }
-
-    function subscribeToStreams(streams) {
-      if (!binanceWS || binanceWS.readyState !== WebSocket.OPEN) {
-        console.log('WebSocket not open, opening and queuing subscription');
-        openBinanceWS();
-        return;
-      }
-      if (streams.length === 0) return;
-
-      const params = {
-        method: 'SUBSCRIBE',
-        params: streams,
-        id: Date.now()
-      };
-      try {
-        binanceWS.send(JSON.stringify(params));
-        console.log('Subscribed to streams:', streams);
-        streams.forEach(stream => binanceSubscribed.add(stream));
-      } catch (e) {
-        console.error('Error subscribing to streams:', e);
-        updateWebSocketStatus('disconnected', 'Subscription failed');
-      }
-    }
-
-    function unsubscribeFromStreams(streams) {
-      if (!binanceWS || binanceWS.readyState !== WebSocket.OPEN) return;
-
-      const params = {
-        method: 'UNSUBSCRIBE',
-        params: streams,
-        id: Date.now()
-      };
-      try {
-        binanceWS.send(JSON.stringify(params));
-        console.log('Unsubscribed from streams:', streams);
-        streams.forEach(stream => binanceSubscribed.delete(stream));
-      } catch (e) {
-        console.error('Error unsubscribing from streams:', e);
-        updateWebSocketStatus('disconnected', 'Unsubscription failed');
-      }
-    }
-
-    function subscribeBinanceStreams(symbols) {
-      if (!symbols || symbols.length === 0) return;
-
-      const validSymbols = Array.from(new Set(symbols.map(s => s.toUpperCase()))).slice(0, MAX_STREAMS);
-      const newStreams = validSymbols.map(binanceStreamNameFor);
-      const currentStreams = Array.from(binanceSubscribed);
-      const streamsToSubscribe = newStreams.filter(s => !binanceSubscribed.has(s));
-      const streamsToUnsubscribe = currentStreams.filter(s => !newStreams.includes(s));
-
-      liveSymbols = validSymbols;
-
-      if (streamsToUnsubscribe.length > 0) {
-        unsubscribeFromStreams(streamsToUnsubscribe);
-      }
-      if (streamsToSubscribe.length > 0) {
-        subscribeToStreams(streamsToSubscribe);
-      }
-    }
-
-    // Fallback data simulation
-    function generateFallbackPrice(symbol, lastPrice) {
-      const basePrices = {
-        'BTC': 51000,
-        'ETH': 2900,
-        'BNB': 350,
-        'ADA': 0.52,
-        'SOL': 105,
-        'DOT': 7.2,
-        'DOGE': 0.12,
-        'XRP': 0.58,
-        'LTC': 72,
-        'LINK': 15.8
-      };
-      const basePrice = lastPrice || basePrices[symbol.toUpperCase()] || 100;
-      const change = (Math.random() - 0.5) * basePrice * 0.005; // Smaller changes for realism
-      return basePrice + change;
-    }
-
-    let fallbackInterval = null;
-    function startFallbackData() {
-      if (fallbackInterval) clearInterval(fallbackInterval);
-      fallbackInterval = setInterval(() => {
-        liveSymbols.forEach(symbol => {
-          const lastPrice = liveBuffers[symbol]?.length > 0 ? liveBuffers[symbol][liveBuffers[symbol].length - 1].y : null;
-          handleBinanceTrade(symbol, generateFallbackPrice(symbol, lastPrice));
-        });
-      }, 1000); // Update every second
-    }
-
-    function stopFallbackData() {
-      if (fallbackInterval) {
-        clearInterval(fallbackInterval);
-        fallbackInterval = null;
-      }
-    }
-
-    const liveBuffers = {};
-    let pendingUpdates = false;
-    let lastUpdateTime = 0;
-    const UPDATE_INTERVAL = 1000; // 1 second
-    function handleBinanceTrade(symbol, price) {
-      if (!symbol || isNaN(price)) return;
-      const now = Date.now();
-      if (!liveBuffers[symbol]) liveBuffers[symbol] = [];
-      liveBuffers[symbol].push({ x: now, y: price });
-      if (liveBuffers[symbol].length > 300) liveBuffers[symbol].shift(); // Keep 5 minutes of data
-
-      if (currentSymbol === symbol && ohlcChart && !pendingUpdates) {
-        pendingUpdates = true;
-        requestAnimationFrame(() => {
-          updateChartLiveData(symbol);
-          pendingUpdates = false;
-        });
-      }
-    }
-
-    function updateChartLiveData(symbol) {
-      if (!ohlcChart || currentSymbol !== symbol) return;
-      const now = Date.now();
-      if (now - lastUpdateTime < UPDATE_INTERVAL) return;
-      lastUpdateTime = now;
-
-      const liveLabel = `LIVE: ${symbol}`;
-      const dsIndex = ohlcChart.data.datasets.findIndex(d => d.label === liveLabel);
-      const liveData = liveBuffers[symbol].slice(-60); // Show last 60 seconds
-
-      if (dsIndex === -1) {
-        ohlcChart.data.datasets.push({
-          label: liveLabel,
-          data: liveData,
-          type: 'line',
-          borderColor: '#ff4d4d',
-          backgroundColor: 'rgba(255,77,77,0.08)',
-          tension: 0.2,
-          pointRadius: 0,
-          borderWidth: 2,
-          yAxisID: 'y'
-        });
-      } else {
-        ohlcChart.data.datasets[dsIndex].data = liveData;
-      }
-
-      try {
-        ohlcChart.options.scales.x.min = liveData[0]?.x || undefined;
-        ohlcChart.options.scales.x.max = liveData[liveData.length - 1]?.x || undefined;
-        ohlcChart.update('none');
-      } catch (e) {
-        console.error('Chart update error:', e);
-      }
+      return res;
     }
 
     function renderChart(ohlc, label) {
       const canvas = $('ohlcChart');
       const ctx = canvas.getContext('2d');
       if (ohlcChart) {
-        try { ohlcChart.destroy(); } catch(e){}
+        try { ohlcChart.destroy(); } catch(e) {}
       }
       if (!ohlc || ohlc.length === 0) {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.font = '16px Arial';
         ctx.fillStyle = '#666';
         ctx.textAlign = 'center';
@@ -683,40 +643,6 @@
         });
       }
 
-      if (currentIndicator !== 'none') {
-        const n = parseInt(currentIndicator.replace('ma',''));
-        const closes = ohlc.map(d => d.c);
-        const ma = simpleMovingAverage(closes, n);
-        const maData = ma.map((v,i) => ({ x: ohlc[i].t, y: v })).filter(d => d.y !== null);
-        if (maData.length > 0) {
-          datasets.push({
-            label: `MA${n}`,
-            data: maData,
-            type: 'line',
-            borderColor: '#ff7f0e',
-            backgroundColor: 'rgba(255,127,14,0.1)',
-            tension: 0.4,
-            pointRadius: 0,
-            borderWidth: 2
-          });
-        }
-      }
-
-      const liveBuffer = liveBuffers[label];
-      if (liveBuffer && liveBuffer.length > 0) {
-        datasets.push({
-          label: `LIVE: ${label}`,
-          data: liveBuffer.slice(-60),
-          type: 'line',
-          borderColor: '#ff4d4d',
-          backgroundColor: 'rgba(255,77,77,0.08)',
-          tension: 0.2,
-          pointRadius: 0,
-          borderWidth: 2,
-          yAxisID: 'y'
-        });
-      }
-
       const config = {
         type: currentChartType === 'candlestick' ? 'candlestick' : 'line',
         data: { datasets },
@@ -725,8 +651,15 @@
           maintainAspectRatio: false,
           animation: false,
           plugins: {
-            legend: { display: true, position: 'top' },
-            tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size:12 }, bodyFont: { size:12 }, padding: 10 },
+            legend: { display: true, position: 'top', labels: { font: { size: 12, family: 'Inter' } } },
+            tooltip: { 
+              mode: 'index', 
+              intersect: false, 
+              backgroundColor: 'rgba(0,0,0,0.8)', 
+              titleFont: { size: 12, family: 'Inter' }, 
+              bodyFont: { size: 12, family: 'Inter' }, 
+              padding: 10 
+            },
             zoom: {
               pan: { enabled: true, mode: 'x' },
               zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
@@ -737,25 +670,54 @@
               type: 'time', 
               time: { unit: currentRange === '1D' ? 'second' : 'day', displayFormats: { second: 'HH:mm:ss', day: 'MMM dd' } }, 
               grid: { color: 'rgba(0,0,0,0.04)' }, 
-              ticks: { maxTicksLimit: 8 }
+              ticks: { maxTicksLimit: 8, font: { size: 10, family: 'Inter' } },
+              min: ohlcData.length > MAX_POINTS ? ohlcData[ohlcData.length - MAX_POINTS].x : ohlcData[0].x,
+              max: ohlcData[ohlcData.length - 1].x
             },
-            y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { callback: function(value) { return '$' + value.toFixed(2); } } }
+            y: { 
+              beginAtZero: false, 
+              grid: { color: 'rgba(0,0,0,0.04)' }, 
+              ticks: { 
+                callback: function(value) { return '$' + value.toFixed(2); }, 
+                font: { size: 10, family: 'Inter' } 
+              } 
+            }
           }
         }
       };
 
-      try { ohlcChart = new Chart(ctx, config); }
-      catch (e) { console.error('Chart render error:', e); }
+      try { ohlcChart = new Chart(ctx, config); } catch (e) { console.error('Chart render error:', e); }
       applyZoomFromSlider();
+      if (currentIndicator !== 'none') scheduleIndicatorRecalc();
     }
 
-    function simpleMovingAverage(arr, n) {
-      const res = [];
-      for (let i=0; i<arr.length; i++) {
-        if (i < n - 1) res.push(null);
-        else { let sum = 0; for (let j=0; j<n; j++) sum += arr[i-j] || 0; res.push(sum / n); }
-      }
-      return res;
+    function computeSignalsFromOHLC(ohlc) {
+      if (!ohlc || ohlc.length < 20) return { recommendation: 'Hold', reason: 'Insufficient data for analysis' };
+      const closes = ohlc.map(d => d.c).filter(c => c > 0);
+      const ma10 = simpleMovingAverage(closes, 10);
+      const ma50 = simpleMovingAverage(closes, 50);
+      const currentMA10 = ma10[ma10.length - 1];
+      const currentMA50 = ma50[ma50.length - 1];
+      const currentPrice = closes[closes.length - 1];
+      const signal = { recommendation: 'Hold', reason: 'No clear trend detected' };
+      if (currentMA10 > currentMA50 && currentPrice > currentMA10) { signal.recommendation = 'Buy'; signal.reason = 'Bullish trend: Price above MA10 and MA10 above MA50'; }
+      else if (currentMA10 < currentMA50 && currentPrice < currentMA10) { signal.recommendation = 'Sell'; signal.reason = 'Bearish trend: Price below MA10 and MA10 below MA50'; }
+      const shortTermMomentum = ((currentPrice - closes[closes.length - 5]) / closes[closes.length - 5]) * 100;
+      if (Math.abs(shortTermMomentum) > 3) signal.momentum = `${shortTermMomentum.toFixed(2)}% over last 5 periods`;
+      return signal;
+    }
+
+    function updateAdvisories(symbol, data) {
+      const advisoriesEl = $('advisories');
+      if (data.error) { advisoriesEl.innerHTML = `<div class="text-red-600"><strong>${symbol}</strong>: ${data.error}</div>`; return; }
+      const signal = computeSignalsFromOHLC(data.ohlc);
+      advisoriesEl.innerHTML = `
+        <strong>${symbol}</strong>
+        <div class="mt-2">Recommendation: <strong>${signal.recommendation}</strong></div>
+        <div class="meta mt-2">${signal.reason}</div>
+        ${signal.momentum ? `<div class="meta mt-2">Momentum: ${signal.momentum}</div>` : ''}
+        <div class="mt-3 text-sm text-sky-600"><strong>Live Data Analysis</strong> - Based on ${useFallbackData ? 'simulated' : 'real market'} data</div>
+      `;
     }
 
     async function loadNews() {
@@ -792,35 +754,6 @@
         console.error('Error loading news:', error);
         $('newsGrid').innerHTML = '<div class="error text-sm">News feed updating...</div>';
       }
-    }
-
-    function computeSignalsFromOHLC(ohlc) {
-      if (!ohlc || ohlc.length < 20) return { recommendation: 'Hold', reason: 'Insufficient data for analysis' };
-      const closes = ohlc.map(d => d.c).filter(c => c > 0);
-      const ma10 = simpleMovingAverage(closes, 10);
-      const ma50 = simpleMovingAverage(closes, 50);
-      const currentMA10 = ma10[ma10.length - 1];
-      const currentMA50 = ma50[ma50.length - 1];
-      const currentPrice = closes[closes.length - 1];
-      const signal = { recommendation: 'Hold', reason: 'No clear trend detected' };
-      if (currentMA10 > currentMA50 && currentPrice > currentMA10) { signal.recommendation = 'Buy'; signal.reason = 'Bullish trend: Price above MA10 and MA10 above MA50'; }
-      else if (currentMA10 < currentMA50 && currentPrice < currentMA10) { signal.recommendation = 'Sell'; signal.reason = 'Bearish trend: Price below MA10 and MA10 below MA50'; }
-      const shortTermMomentum = ((currentPrice - closes[closes.length - 5]) / closes[closes.length - 5]) * 100;
-      if (Math.abs(shortTermMomentum) > 3) signal.momentum = `${shortTermMomentum.toFixed(2)}% over last 5 periods`;
-      return signal;
-    }
-
-    function updateAdvisories(symbol, data) {
-      const advisoriesEl = $('advisories');
-      if (data.error) { advisoriesEl.innerHTML = `<div class="text-red-600"><strong>${symbol}</strong>: ${data.error}</div>`; return; }
-      const signal = computeSignalsFromOHLC(data.ohlc);
-      advisoriesEl.innerHTML = `
-        <strong>${symbol}</strong>
-        <div class="mt-2">Recommendation: <strong>${signal.recommendation}</strong></div>
-        <div class="meta mt-2">${signal.reason}</div>
-        ${signal.momentum ? `<div class="meta mt-2">Momentum: ${signal.momentum}</div>` : ''}
-        <div class="mt-3 text-sm text-sky-600"><strong>Live Data Analysis</strong> - Based on ${useFallbackData ? 'simulated' : 'real market'} data</div>
-      `;
     }
 
     async function loadPosts() {
@@ -863,26 +796,23 @@
         let data;
         if (['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol)) {
           data = await fetchCryptoData(currentSymbol);
-          const watchlist = getWatch();
-          const toSubscribe = Array.from(new Set([currentSymbol].concat(watchlist.slice(0, MAX_STREAMS - 1))));
-          liveSymbols = toSubscribe.filter(s => s && s.length > 0);
-          subscribeBinanceStreams(liveSymbols);
-          stopFallbackData();
-          openBinanceWS(); // Ensure WebSocket is initiated
+          currentBucket = null;
+          liveLineBuffer = [];
+          connectBinance(currentSymbol + 'USDT');
         } else {
           data = await fetchStockData(currentSymbol, range);
-          if (binanceSubscribed.size > 0) {
-            unsubscribeFromStreams(Array.from(binanceSubscribed));
-          }
+          if (binanceWS) try { binanceWS.close(); } catch(e) {}
+          updateWebSocketStatus('disconnected', 'Not available for stocks');
           stopFallbackData();
+          currentBucket = null;
+          liveLineBuffer = [];
         }
 
-        liveBuffers[currentSymbol] = liveBuffers[currentSymbol] || [];
         renderChart(data.ohlc, currentSymbol);
         chartUpdated.textContent = data.last ? new Date(data.last).toLocaleString() : 'Just now';
         updateAdvisories(currentSymbol, data);
         chartTitle.classList.remove('loading');
-        chartTitle.textContent = `${currentSymbol} (${range}) - Live Data`;
+        chartTitle.textContent = `${currentSymbol} (${range}) - Last: $${(liveLineBuffer[liveLineBuffer.length - 1]?.y || data.ohlc[data.ohlc.length - 1]?.c || 0).toFixed(2)}`;
       } catch (error) {
         console.error(`Error loading symbol ${currentSymbol}:`, error);
         chartTitle.classList.remove('loading');
@@ -980,8 +910,8 @@
       setInterval(() => {
         loadCryptoAdvice(); loadPosts();
         if (Date.now() - lastNewsUpdate >= NEWS_UPDATE_INTERVAL) loadNews();
-        if (currentSymbol && !useFallbackData) {
-          loadSymbol(currentSymbol, currentRange);
+        if (currentSymbol && !useFallbackData && ['BTC','ETH','ADA','SOL','DOT','DOGE','XRP','LTC','BNB','LINK'].includes(currentSymbol)) {
+          connectBinance(currentSymbol + 'USDT');
         }
       }, 60000);
     });
